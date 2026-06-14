@@ -64,7 +64,7 @@ fun CallDetailScreen(
                     request = mapOf("status" to newStatus)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
-                    call = response.body()?.call ?: call?.copy(status = newStatus)
+                    call = call?.copy(status = newStatus)
                 }
             } catch (e: Exception) {
                 error = e.localizedMessage
@@ -165,15 +165,15 @@ fun CallDetailScreen(
                 DetailSection(title = "Vehicle") {
                     DetailRow("Vehicle", currentCall.vehicleDescription)
                     if (currentCall.vehicleColor != null) DetailRow("Color", currentCall.vehicleColor)
-                    if (currentCall.vehiclePlate != null) DetailRow("Plate", "${currentCall.vehiclePlate} ${currentCall.vehicleState ?: ""}")
+                    if (currentCall.vehiclePlate != null) DetailRow("Plate", "${currentCall.vehiclePlate} ${currentCall.plateState ?: ""}")
                     if (currentCall.vehicleVin != null) DetailRow("VIN", currentCall.vehicleVin)
                 }
 
                 // Type & Reason
                 DetailSection(title = "Service") {
-                    if (currentCall.type != null) DetailRow("Type", currentCall.type.replace("_", " ").replaceFirstChar { it.uppercase() })
-                    if (currentCall.reason != null) DetailRow("Reason", currentCall.reason)
-                    if (currentCall.accountName != null) DetailRow("Account", currentCall.accountName)
+                    if (currentCall.callType != null) DetailRow("Type", currentCall.callType.replace("_", " ").replaceFirstChar { it.uppercase() })
+                    if (currentCall.reasonForTow != null) DetailRow("Reason", currentCall.reasonForTow)
+                    if (currentCall.customerName != null) DetailRow("Account", currentCall.customerName)
                     if (currentCall.poNumber != null) DetailRow("PO #", currentCall.poNumber)
                 }
 
@@ -212,9 +212,9 @@ fun CallDetailScreen(
                             Text(currentCall.fullDropoffAddress, fontSize = 14.sp)
                         }
                     }
-                    if (currentCall.distance != null) {
+                    if (currentCall.mileage != null) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        DetailRow("Distance", "${currentCall.distance} miles")
+                        DetailRow("Distance", "${currentCall.mileage} miles")
                     }
                 }
 
@@ -229,31 +229,31 @@ fun CallDetailScreen(
                 // Driver & Truck
                 DetailSection(title = "Assignment") {
                     DetailRow("Driver", currentCall.driverName ?: "Unassigned")
-                    DetailRow("Truck", currentCall.truckName ?: "Unassigned")
-                    if (currentCall.etaMinutes != null) DetailRow("ETA", "${currentCall.etaMinutes} min")
+                    DetailRow("Truck", currentCall.truckNumber ?: "Unassigned")
+                    if (currentCall.mileage != null) DetailRow("ETA", "${currentCall.mileage} min")
                 }
 
                 // Billing
-                if (currentCall.amount != null) {
+                if (currentCall.totalAmount != null) {
                     val formatter = NumberFormat.getCurrencyInstance(Locale.US)
                     DetailSection(title = "Billing") {
-                        DetailRow("Amount", formatter.format(currentCall.amount))
+                        DetailRow("Amount", formatter.format(currentCall.totalAmount))
                         if (currentCall.paymentMethod != null) DetailRow("Payment", currentCall.paymentMethod)
                         if (currentCall.paymentStatus != null) DetailRow("Status", currentCall.paymentStatus)
-                        if (currentCall.invoiceNumber != null) DetailRow("Invoice #", currentCall.invoiceNumber)
+                        if (currentCall.poNumber != null) DetailRow("Invoice #", currentCall.poNumber)
                     }
                 }
 
                 // Notes
-                if (!currentCall.notes.isNullOrBlank()) {
+                if (!currentCall.dispatchNotes.isNullOrBlank()) {
                     DetailSection(title = "Notes") {
-                        Text(currentCall.notes, fontSize = 14.sp)
+                        Text(currentCall.dispatchNotes, fontSize = 14.sp)
                     }
                 }
 
-                if (!currentCall.internalNotes.isNullOrBlank() && user.isDispatcher) {
+                if (!currentCall.driverNotes.isNullOrBlank() && user.isDispatcher) {
                     DetailSection(title = "Internal Notes") {
-                        Text(currentCall.internalNotes, fontSize = 14.sp)
+                        Text(currentCall.driverNotes, fontSize = 14.sp)
                     }
                 }
 

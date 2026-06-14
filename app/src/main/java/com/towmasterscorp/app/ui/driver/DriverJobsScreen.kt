@@ -261,10 +261,10 @@ fun DriverJobCard(
             }
 
             // Notes preview
-            if (!call.notes.isNullOrBlank()) {
+            if (!call.dispatchNotes.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = call.notes,
+                    text = call.dispatchNotes,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
