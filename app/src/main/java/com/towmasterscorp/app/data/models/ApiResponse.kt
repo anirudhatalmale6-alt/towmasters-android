@@ -43,7 +43,7 @@ data class UsersResponse(
     @SerializedName("users") val users: List<User>? = null,
     @SerializedName("drivers") val drivers: List<User>? = null
 ) {
-    fun getUsers(): List<User> = users ?: drivers ?: emptyList()
+    fun getAllUsers(): List<User> = users ?: drivers ?: emptyList()
 }
 
 data class ConversationsResponse(
