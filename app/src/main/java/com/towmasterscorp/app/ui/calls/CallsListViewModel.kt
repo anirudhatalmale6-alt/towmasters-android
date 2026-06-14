@@ -27,9 +27,9 @@ class CallsListViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                val response = ApiClient.getApi().getCalls(perPage = 100)
+                val response = ApiClient.getApi().getCalls()
                 if (response.isSuccessful && response.body()?.success == true) {
-                    val calls = response.body()?.getItems() ?: emptyList()
+                    val calls = response.body()?.calls ?: emptyList()
                     _uiState.value = _uiState.value.copy(
                         calls = calls,
                         isLoading = false

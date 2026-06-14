@@ -3,92 +3,120 @@ package com.towmasterscorp.app.data.models
 import com.google.gson.annotations.SerializedName
 
 data class Call(
-    @SerializedName("id") val id: Int,
+    @SerializedName("id") val id: Int = 0,
     @SerializedName("call_number") val callNumber: String? = null,
-    @SerializedName("status") val status: String, // new, dispatched, en_route, on_scene, hooked, in_transit, delivered, completed, cancelled
-    @SerializedName("priority") val priority: String? = null, // low, normal, high, emergency
-    @SerializedName("type") val type: String? = null, // tow, jumpstart, lockout, tire_change, fuel_delivery, winch, accident
+    @SerializedName("status") val status: String = "pending",
+    @SerializedName("priority") val priority: String? = "normal",
+    @SerializedName("call_type") val callType: String? = "tow",
     @SerializedName("company_id") val companyId: Int? = null,
-    @SerializedName("driver_id") val driverId: Int? = null,
+    @SerializedName("assigned_driver_id") val assignedDriverId: Int? = null,
     @SerializedName("driver_name") val driverName: String? = null,
-    @SerializedName("truck_id") val truckId: Int? = null,
-    @SerializedName("truck_name") val truckName: String? = null,
+    @SerializedName("assigned_truck_id") val assignedTruckId: Int? = null,
+    @SerializedName("truck_number") val truckNumber: String? = null,
     @SerializedName("customer_id") val customerId: Int? = null,
     @SerializedName("customer_name") val customerName: String? = null,
     @SerializedName("customer_phone") val customerPhone: String? = null,
     @SerializedName("caller_name") val callerName: String? = null,
     @SerializedName("caller_phone") val callerPhone: String? = null,
-    @SerializedName("vehicle_year") val vehicleYear: String? = null,
+    @SerializedName("contact_name") val contactName: String? = null,
+    @SerializedName("contact_phone") val contactPhone: String? = null,
+    @SerializedName("vehicle_year") val vehicleYear: Any? = null,
     @SerializedName("vehicle_make") val vehicleMake: String? = null,
     @SerializedName("vehicle_model") val vehicleModel: String? = null,
     @SerializedName("vehicle_color") val vehicleColor: String? = null,
     @SerializedName("vehicle_vin") val vehicleVin: String? = null,
-    @SerializedName("vehicle_plate") val vehiclePlate: String? = null,
-    @SerializedName("vehicle_state") val vehicleState: String? = null,
+    @SerializedName("vehicle_license") val vehicleLicense: String? = null,
+    @SerializedName("plate_state") val plateState: String? = null,
     @SerializedName("pickup_address") val pickupAddress: String? = null,
     @SerializedName("pickup_city") val pickupCity: String? = null,
     @SerializedName("pickup_state") val pickupState: String? = null,
     @SerializedName("pickup_zip") val pickupZip: String? = null,
-    @SerializedName("pickup_latitude") val pickupLatitude: Double? = null,
-    @SerializedName("pickup_longitude") val pickupLongitude: Double? = null,
+    @SerializedName("pickup_lat") val pickupLat: Any? = null,
+    @SerializedName("pickup_lng") val pickupLng: Any? = null,
     @SerializedName("dropoff_address") val dropoffAddress: String? = null,
     @SerializedName("dropoff_city") val dropoffCity: String? = null,
     @SerializedName("dropoff_state") val dropoffState: String? = null,
     @SerializedName("dropoff_zip") val dropoffZip: String? = null,
-    @SerializedName("dropoff_latitude") val dropoffLatitude: Double? = null,
-    @SerializedName("dropoff_longitude") val dropoffLongitude: Double? = null,
-    @SerializedName("distance") val distance: Double? = null,
-    @SerializedName("eta_minutes") val etaMinutes: Int? = null,
-    @SerializedName("notes") val notes: String? = null,
-    @SerializedName("internal_notes") val internalNotes: String? = null,
-    @SerializedName("po_number") val poNumber: String? = null,
-    @SerializedName("invoice_number") val invoiceNumber: String? = null,
-    @SerializedName("amount") val amount: Double? = null,
-    @SerializedName("payment_method") val paymentMethod: String? = null,
+    @SerializedName("dropoff_lat") val dropoffLat: Any? = null,
+    @SerializedName("dropoff_lng") val dropoffLng: Any? = null,
+    @SerializedName("base_rate") val baseRate: Any? = null,
+    @SerializedName("mileage_rate") val mileageRate: Any? = null,
+    @SerializedName("mileage") val mileage: Any? = null,
+    @SerializedName("additional_charges") val additionalCharges: Any? = null,
+    @SerializedName("tax_rate") val taxRate: Any? = null,
+    @SerializedName("tax_amount") val taxAmount: Any? = null,
+    @SerializedName("total_amount") val totalAmount: Any? = null,
+    @SerializedName("amount_paid") val amountPaid: Any? = null,
     @SerializedName("payment_status") val paymentStatus: String? = null,
-    @SerializedName("account_name") val accountName: String? = null,
-    @SerializedName("reason") val reason: String? = null,
+    @SerializedName("payment_method") val paymentMethod: String? = null,
+    @SerializedName("dispatch_notes") val dispatchNotes: String? = null,
+    @SerializedName("driver_notes") val driverNotes: String? = null,
+    @SerializedName("reason_for_tow") val reasonForTow: String? = null,
+    @SerializedName("po_number") val poNumber: String? = null,
+    @SerializedName("dispatcher_name") val dispatcherName: String? = null,
+    @SerializedName("source") val source: String? = null,
+    @SerializedName("location_id") val locationId: Int? = null,
     @SerializedName("dispatched_at") val dispatchedAt: String? = null,
     @SerializedName("en_route_at") val enRouteAt: String? = null,
     @SerializedName("on_scene_at") val onSceneAt: String? = null,
     @SerializedName("hooked_at") val hookedAt: String? = null,
-    @SerializedName("dropoff_at") val dropoffAt: String? = null,
+    @SerializedName("delivered_at") val deliveredAt: String? = null,
     @SerializedName("completed_at") val completedAt: String? = null,
-    @SerializedName("cancelled_at") val cancelledAt: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null
 ) {
     val vehicleDescription: String
         get() {
-            val parts = listOfNotNull(vehicleYear, vehicleMake, vehicleModel)
-            return if (parts.isNotEmpty()) parts.joinToString(" ") else "Unknown Vehicle"
+            val year = when (vehicleYear) {
+                is Number -> if (vehicleYear.toInt() > 0) vehicleYear.toString() else null
+                is String -> if (vehicleYear.isNotEmpty() && vehicleYear != "0") vehicleYear else null
+                else -> null
+            }
+            val parts = listOfNotNull(year, vehicleMake?.ifEmpty { null }, vehicleModel?.ifEmpty { null })
+            return if (parts.isNotEmpty()) parts.joinToString(" ") else ""
         }
+
+    val vehiclePlate: String? get() = vehicleLicense?.ifEmpty { null }
 
     val fullPickupAddress: String
         get() {
-            val parts = listOfNotNull(pickupAddress, pickupCity, pickupState, pickupZip)
+            val parts = listOfNotNull(
+                pickupAddress?.ifEmpty { null },
+                pickupCity?.ifEmpty { null },
+                pickupState?.ifEmpty { null },
+                pickupZip?.ifEmpty { null }
+            )
             return if (parts.isNotEmpty()) parts.joinToString(", ") else "No address"
         }
 
     val fullDropoffAddress: String
         get() {
-            val parts = listOfNotNull(dropoffAddress, dropoffCity, dropoffState, dropoffZip)
-            return if (parts.isNotEmpty()) parts.joinToString(", ") else "No address"
+            val parts = listOfNotNull(
+                dropoffAddress?.ifEmpty { null },
+                dropoffCity?.ifEmpty { null },
+                dropoffState?.ifEmpty { null },
+                dropoffZip?.ifEmpty { null }
+            )
+            return if (parts.isNotEmpty()) parts.joinToString(", ") else ""
         }
 
     val statusDisplayName: String
         get() = when (status) {
-            "new" -> "New"
+            "pending" -> "Pending"
+            "scheduled" -> "Scheduled"
             "dispatched" -> "Dispatched"
             "en_route" -> "En Route"
             "on_scene" -> "On Scene"
             "hooked" -> "Hooked"
             "in_transit" -> "In Transit"
             "delivered" -> "Delivered"
+            "destination_arrival" -> "Destination Arrival"
             "completed" -> "Completed"
-            "cancelled" -> "Cancelled"
-            else -> status.replaceFirstChar { it.uppercase() }
+            "canceled" -> "Canceled"
+            else -> status.replace("_", " ").replaceFirstChar { it.uppercase() }
         }
+
+    val callTypeDisplay: String
+        get() = (callType ?: "tow").replace("_", " ").replaceFirstChar { it.uppercase() }
 
     val nextDriverStatus: String?
         get() = when (status) {
@@ -113,43 +141,6 @@ data class Call(
         }
 
     val isActive: Boolean
-        get() = status !in listOf("completed", "cancelled")
+        get() = status !in listOf("completed", "canceled")
 }
 
-data class CreateCallRequest(
-    @SerializedName("type") val type: String,
-    @SerializedName("priority") val priority: String = "normal",
-    @SerializedName("caller_name") val callerName: String? = null,
-    @SerializedName("caller_phone") val callerPhone: String? = null,
-    @SerializedName("customer_id") val customerId: Int? = null,
-    @SerializedName("vehicle_year") val vehicleYear: String? = null,
-    @SerializedName("vehicle_make") val vehicleMake: String? = null,
-    @SerializedName("vehicle_model") val vehicleModel: String? = null,
-    @SerializedName("vehicle_color") val vehicleColor: String? = null,
-    @SerializedName("vehicle_plate") val vehiclePlate: String? = null,
-    @SerializedName("pickup_address") val pickupAddress: String? = null,
-    @SerializedName("pickup_city") val pickupCity: String? = null,
-    @SerializedName("pickup_state") val pickupState: String? = null,
-    @SerializedName("pickup_zip") val pickupZip: String? = null,
-    @SerializedName("dropoff_address") val dropoffAddress: String? = null,
-    @SerializedName("dropoff_city") val dropoffCity: String? = null,
-    @SerializedName("dropoff_state") val dropoffState: String? = null,
-    @SerializedName("dropoff_zip") val dropoffZip: String? = null,
-    @SerializedName("driver_id") val driverId: Int? = null,
-    @SerializedName("truck_id") val truckId: Int? = null,
-    @SerializedName("notes") val notes: String? = null,
-    @SerializedName("reason") val reason: String? = null,
-    @SerializedName("account_name") val accountName: String? = null,
-    @SerializedName("po_number") val poNumber: String? = null
-)
-
-data class UpdateCallRequest(
-    @SerializedName("status") val status: String? = null,
-    @SerializedName("driver_id") val driverId: Int? = null,
-    @SerializedName("truck_id") val truckId: Int? = null,
-    @SerializedName("notes") val notes: String? = null,
-    @SerializedName("internal_notes") val internalNotes: String? = null,
-    @SerializedName("amount") val amount: Double? = null,
-    @SerializedName("payment_method") val paymentMethod: String? = null,
-    @SerializedName("payment_status") val paymentStatus: String? = null
-)

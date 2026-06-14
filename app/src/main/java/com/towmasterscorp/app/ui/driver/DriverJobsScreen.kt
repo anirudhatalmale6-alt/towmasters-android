@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.Call
-import com.towmasterscorp.app.data.models.UpdateCallRequest
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.dispatch.getStatusColor
 import com.towmasterscorp.app.ui.dispatch.getStatusDisplayName
@@ -43,7 +42,7 @@ fun DriverJobsScreen(
             try {
                 val response = ApiClient.getApi().getActiveCalls()
                 if (response.isSuccessful && response.body()?.success == true) {
-                    calls = (response.body()?.getItems() ?: emptyList()).filter {
+                    calls = (response.body()?.calls ?: emptyList()).filter {
                         it.driverId == user.id
                     }
                 } else {
@@ -61,7 +60,7 @@ fun DriverJobsScreen(
             try {
                 val response = ApiClient.getApi().updateCall(
                     id = callId,
-                    request = UpdateCallRequest(status = newStatus)
+                    request = mapOf("status" to newStatus)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
                     loadJobs() // Refresh the list

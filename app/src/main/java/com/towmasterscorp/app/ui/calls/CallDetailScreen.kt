@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.Call
-import com.towmasterscorp.app.data.models.UpdateCallRequest
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.dispatch.getStatusColor
 import com.towmasterscorp.app.ui.theme.*
@@ -45,7 +44,7 @@ fun CallDetailScreen(
             try {
                 val response = ApiClient.getApi().getCall(callId)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    call = response.body()?.getItem()
+                    call = response.body()?.call
                 } else {
                     error = response.body()?.error ?: "Failed to load call"
                 }
@@ -62,10 +61,10 @@ fun CallDetailScreen(
             try {
                 val response = ApiClient.getApi().updateCall(
                     id = callId,
-                    request = UpdateCallRequest(status = newStatus)
+                    request = mapOf("status" to newStatus)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
-                    call = response.body()?.getItem() ?: call?.copy(status = newStatus)
+                    call = response.body()?.call ?: call?.copy(status = newStatus)
                 }
             } catch (e: Exception) {
                 error = e.localizedMessage
