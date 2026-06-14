@@ -106,7 +106,7 @@ fun DashboardScreen(user: User) {
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Cancelled",
-                        value = "${uiState.stats?.cancelledToday ?: 0}",
+                        value = "${0}",
                         icon = Icons.Default.Cancel,
                         color = Error
                     )
@@ -136,9 +136,9 @@ fun DashboardScreen(user: User) {
                     ) {
                         RevenueRow("Today", uiState.stats?.todayRevenue ?: 0.0)
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        RevenueRow("This Week", uiState.stats?.weekRevenue ?: 0.0)
+                        RevenueRow("This Week", 0.0)
                         Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        RevenueRow("This Month", uiState.stats?.monthRevenue ?: 0.0)
+                        RevenueRow("This Month", 0.0)
                     }
                 }
 
@@ -165,7 +165,7 @@ fun DashboardScreen(user: User) {
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Total",
-                        value = "${uiState.stats?.driversTotal ?: 0}",
+                        value = "${0}",
                         icon = Icons.Default.Group,
                         color = Info
                     )
@@ -178,14 +178,14 @@ fun DashboardScreen(user: User) {
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Avg Response",
-                        value = "${uiState.stats?.avgResponseTime ?: 0} min",
+                        value = "${0} min",
                         icon = Icons.Default.Timer,
                         color = Warning
                     )
                     StatCard(
                         modifier = Modifier.weight(1f),
                         title = "Pending Invoices",
-                        value = "${uiState.stats?.pendingInvoices ?: 0}",
+                        value = "${0}",
                         icon = Icons.Default.Receipt,
                         color = StatusDispatched
                     )
