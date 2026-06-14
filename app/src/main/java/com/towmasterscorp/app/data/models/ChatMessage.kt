@@ -23,6 +23,6 @@ data class ChatMessage(
 )
 
 data class SendMessageRequest(
-    @SerializedName("to") val to: Int,
+    @SerializedName("recipient_id") val recipientId: Int,
     @SerializedName("message") val message: String
 )

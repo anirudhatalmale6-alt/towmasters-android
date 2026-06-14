@@ -72,22 +72,16 @@ fun ChatScreen(
             isSending = true
             try {
                 val response = ApiClient.getApi().sendMessage(
-                    SendMessageRequest(to = otherUserId, message = text)
+                    SendMessageRequest(recipientId = otherUserId, message = text)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
-                    
-                    if (newMessage != null) {
-                        messages = messages + newMessage
-                    } else {
-                        // Construct a local message
-                        messages = messages + ChatMessage(
-                            id = (messages.lastOrNull()?.id ?: 0) + 1,
-                            senderId = currentUser.id,
-                            receiverId = otherUserId,
-                            message = text,
-                            senderName = currentUser.fullName
-                        )
-                    }
+                    messages = messages + ChatMessage(
+                        id = (messages.lastOrNull()?.id ?: 0) + 1,
+                        senderId = currentUser.id,
+                        receiverId = otherUserId,
+                        message = text,
+                        senderName = currentUser.fullName
+                    )
                     if (messages.isNotEmpty()) {
                         listState.animateScrollToItem(messages.size - 1)
                     }

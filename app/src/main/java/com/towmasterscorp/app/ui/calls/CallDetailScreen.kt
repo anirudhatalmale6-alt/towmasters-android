@@ -259,7 +259,7 @@ fun CallDetailScreen(
 
                 // Status Update Button (for drivers)
                 if (currentCall.isActive && currentCall.nextDriverStatus != null) {
-                    val canUpdate = user.isDriver && currentCall.driverId == user.id || user.isDispatcher
+                    val canUpdate = user.isDriver && currentCall.assignedDriverId == user.id || user.isDispatcher
                     if (canUpdate) {
                         Button(
                             onClick = { updateStatus(currentCall.nextDriverStatus!!) },
@@ -297,9 +297,9 @@ fun CallDetailScreen(
                     if (currentCall.enRouteAt != null) DetailRow("En Route", currentCall.enRouteAt)
                     if (currentCall.onSceneAt != null) DetailRow("On Scene", currentCall.onSceneAt)
                     if (currentCall.hookedAt != null) DetailRow("Hooked", currentCall.hookedAt)
-                    if (currentCall.dropoffAt != null) DetailRow("Drop-off", currentCall.dropoffAt)
+                    if (currentCall.deliveredAt != null) DetailRow("Drop-off", currentCall.deliveredAt)
                     if (currentCall.completedAt != null) DetailRow("Completed", currentCall.completedAt)
-                    if (currentCall.cancelledAt != null) DetailRow("Cancelled", currentCall.cancelledAt)
+                    if (currentCall.completedAt != null) DetailRow("Cancelled", currentCall.completedAt)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

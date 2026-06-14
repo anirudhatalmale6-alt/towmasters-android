@@ -43,7 +43,7 @@ fun DriverJobsScreen(
                 val response = ApiClient.getApi().getActiveCalls()
                 if (response.isSuccessful && response.body()?.success == true) {
                     calls = (response.body()?.calls ?: emptyList()).filter {
-                        it.driverId == user.id
+                        it.assignedDriverId == user.id
                     }
                 } else {
                     error = response.body()?.error ?: "Failed to load jobs"
