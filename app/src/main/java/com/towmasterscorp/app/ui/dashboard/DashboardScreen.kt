@@ -135,9 +135,9 @@ fun DashboardScreen(user: User) {
                             .padding(16.dp)
                     ) {
                         RevenueRow("Today", uiState.stats?.todayRevenue ?: 0.0)
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
                         RevenueRow("This Week", uiState.stats?.weekRevenue ?: 0.0)
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
                         RevenueRow("This Month", uiState.stats?.monthRevenue ?: 0.0)
                     }
                 }

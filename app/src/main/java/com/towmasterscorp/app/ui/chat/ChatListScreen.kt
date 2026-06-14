@@ -113,7 +113,7 @@ fun ChatListScreen(
                         conversation = conversation,
                         onClick = { onConversationClick(conversation.userId) }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    Divider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
