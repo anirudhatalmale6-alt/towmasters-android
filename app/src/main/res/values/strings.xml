@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TowMasters</string>
+    <string name="login_title">TowMasters</string>
+    <string name="login_subtitle">Towing Dispatch Management</string>
+    <string name="email_hint">Email</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Sign In</string>
+    <string name="logging_in">Signing in...</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="dispatch">Dispatch</string>
+    <string name="calls">Calls</string>
+    <string name="my_jobs">My Jobs</string>
+    <string name="more">More</string>
+    <string name="chat">Chat</string>
+    <string name="settings">Settings</string>
+    <string name="logout">Logout</string>
+    <string name="clock_in">Clock In</string>
+    <string name="clock_out">Clock Out</string>
+    <string name="customers">Customers</string>
+    <string name="invoices">Invoices</string>
+    <string name="trucks">Trucks</string>
+    <string name="inspections">Inspections</string>
+    <string name="fuel_receipts">Fuel Receipts</string>
+    <string name="impound">Impound Lot</string>
+    <string name="location_tracking">Location Tracking</string>
+    <string name="location_notification_title">TowMasters GPS Active</string>
+    <string name="location_notification_text">Sending your location to dispatch</string>
+    <string name="notification_channel_name">TowMasters Notifications</string>
+    <string name="notification_channel_description">Dispatch notifications and call updates</string>
+    <string name="location_channel_name">Location Tracking</string>
+    <string name="location_channel_description">GPS location tracking service</string>
+</resources>
