@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "155302547812",
+    "project_id": "towmasters-7785c",
+    "storage_bucket": "towmasters-7785c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:155302547812:android:eaacd6ee0bb7513501aa71",
+        "android_client_info": {
+          "package_name": "com.towmasterscorp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOH-lWnJA3fsXpJjDjI3sRSzTCocJaV-E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
