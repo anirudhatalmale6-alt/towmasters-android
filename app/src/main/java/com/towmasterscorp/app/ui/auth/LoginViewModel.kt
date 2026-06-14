@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.LoginRequest
+import com.towmasterscorp.app.data.models.LoginResponse
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
@@ -64,59 +65,75 @@ class LoginViewModel(
     }
 
     fun login() {
+        try {
+            loginInternal()
+        } catch (e: Exception) {
+            Log.e("LoginVM", "Login crashed", e)
+            _uiState.value = _uiState.value.copy(isLoading = false, error = "App error: ${e.message}")
+        }
+    }
+
+    private fun loginInternal() {
         val state = _uiState.value
         if (state.email.isBlank() || state.password.isBlank()) {
             _uiState.value = state.copy(error = "Please enter email and password")
             return
         }
 
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = withContext(Dispatchers.IO) {
-                    ApiClient.getApi().login(
-                        LoginRequest(email = state.email.trim(), password = state.password)
-                    )
-                }
+                val url = java.net.URL("https://app.towmasterscorp.com/api/auth.php?action=login")
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setRequestProperty("Accept", "application/json")
+                connection.doOutput = true
+                connection.connectTimeout = 15000
+                connection.readTimeout = 15000
 
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body?.success == true && body.token != null && body.user != null) {
-                        ApiClient.token = body.token
-                        authPreferences.saveToken(body.token)
-                        authPreferences.saveUser(body.user)
+                val jsonBody = """{"email":"${state.email.trim()}","password":"${state.password}"}"""
+                connection.outputStream.use { it.write(jsonBody.toByteArray()) }
+
+                val responseCode = connection.responseCode
+                val responseBody = if (responseCode in 200..299) {
+                    connection.inputStream.bufferedReader().readText()
+                } else {
+                    connection.errorStream?.bufferedReader()?.readText() ?: ""
+                }
+                connection.disconnect()
+
+                Log.d("LoginVM", "Response: $responseCode - $responseBody")
+
+                val gson = com.google.gson.Gson()
+                val result = gson.fromJson(responseBody, LoginResponse::class.java)
+
+                withContext(Dispatchers.Main) {
+                    if (result?.success == true && result.token != null && result.user != null) {
+                        ApiClient.token = result.token
+                        authPreferences.saveToken(result.token)
+                        authPreferences.saveUser(result.user)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             isLoggedIn = true,
-                            user = body.user
+                            user = result.user
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            error = body?.error ?: body?.message ?: "Login failed"
+                            error = result?.error ?: result?.message ?: "Login failed"
                         )
                     }
-                } else {
-                    val errorBody = response.errorBody()?.string()
-                    val errorMsg = try {
-                        val gson = com.google.gson.Gson()
-                        val err = gson.fromJson(errorBody, Map::class.java)
-                        err?.get("error")?.toString() ?: "Login failed (${response.code()})"
-                    } catch (e: Exception) {
-                        "Login failed (${response.code()})"
-                    }
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = errorMsg
-                    )
                 }
             } catch (e: Exception) {
                 Log.e("LoginVM", "Login error", e)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Connection error: ${e.message ?: "Unknown error"}"
-                )
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Error: ${e.message ?: "Connection failed"}"
+                    )
+                }
             }
         }
     }
