@@ -113,6 +113,7 @@ fun AppContent(authPreferences: AuthPreferences) {
     LaunchedEffect(Unit) {
         val token = authPreferences.tokenFlow.first()
         if (!token.isNullOrEmpty()) {
+            ApiClient.token = token
             val user = authPreferences.userFlow.first()
             if (user != null) {
                 currentUser = user

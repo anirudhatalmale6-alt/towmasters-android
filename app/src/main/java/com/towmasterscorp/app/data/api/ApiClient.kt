@@ -1,12 +1,9 @@
 package com.towmasterscorp.app.data.api
 
-import com.towmasterscorp.app.data.preferences.AuthPreferences
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import com.google.gson.GsonBuilder
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import com.google.gson.GsonBuilder
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
@@ -15,15 +12,11 @@ object ApiClient {
 
     private const val BASE_URL = "https://app.towmasterscorp.com/api/"
 
-    private var authPreferences: AuthPreferences? = null
+    @Volatile
+    var token: String? = null
+
     private var retrofit: Retrofit? = null
     private var api: TowMastersApi? = null
-
-    fun initialize(authPreferences: AuthPreferences) {
-        this.authPreferences = authPreferences
-        this.retrofit = null
-        this.api = null
-    }
 
     fun getApi(): TowMastersApi {
         if (api == null) {
@@ -39,15 +32,11 @@ object ApiClient {
             }
 
             val authInterceptor = Interceptor { chain ->
-                val token = runBlocking {
-                    authPreferences?.tokenFlow?.first()
-                }
-
                 val request = chain.request().newBuilder().apply {
-                    addHeader("Content-Type", "application/json")
                     addHeader("Accept", "application/json")
-                    if (!token.isNullOrEmpty()) {
-                        addHeader("Authorization", "Bearer $token")
+                    val currentToken = token
+                    if (!currentToken.isNullOrEmpty()) {
+                        addHeader("Authorization", "Bearer $currentToken")
                     }
                 }.build()
 

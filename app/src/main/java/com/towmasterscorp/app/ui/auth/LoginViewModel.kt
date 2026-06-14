@@ -36,6 +36,7 @@ class LoginViewModel(
         viewModelScope.launch {
             val token = authPreferences.tokenFlow.first()
             if (!token.isNullOrEmpty()) {
+                ApiClient.token = token
                 try {
                     val response = ApiClient.getApi().getMe()
                     if (response.isSuccessful && response.body()?.success == true) {
@@ -86,9 +87,9 @@ class LoginViewModel(
                         val token = body.token
                         val user = body.user
                         if (token != null && user != null) {
+                            ApiClient.token = token
                             authPreferences.saveToken(token)
                             authPreferences.saveUser(user)
-                            ApiClient.resetClient()
                             _uiState.value = _uiState.value.copy(
                                 isLoading = false,
                                 isLoggedIn = true,

@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import com.towmasterscorp.app.services.FCMService
 import com.towmasterscorp.app.services.LocationService
@@ -21,9 +20,6 @@ class TowMastersApp : Application() {
 
         // Initialize preferences
         authPreferences = AuthPreferences(this)
-
-        // Initialize API client with auth preferences
-        ApiClient.initialize(authPreferences)
 
         // Create notification channels
         createNotificationChannels()
