@@ -42,7 +42,7 @@ fun ChatListScreen(
             try {
                 val response = ApiClient.getApi().getConversations()
                 if (response.isSuccessful && response.body()?.success == true) {
-                    conversations = response.body()?.data ?: emptyList()
+                    conversations = response.body()?.getItems() ?: emptyList()
                 } else {
                     error = response.body()?.error ?: "Failed to load conversations"
                 }

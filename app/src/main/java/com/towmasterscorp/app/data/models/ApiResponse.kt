@@ -9,8 +9,11 @@ data class ApiResponse<T>(
     @SerializedName("data") val data: T? = null,
     @SerializedName("token") val token: String? = null,
     @SerializedName("user") val user: User? = null,
-    @SerializedName("company") val company: Company? = null
-)
+    @SerializedName("company") val company: Company? = null,
+    @SerializedName("call") val call: T? = null
+) {
+    fun getItem(): T? = data ?: call
+}
 
 data class ListResponse<T>(
     @SerializedName("success") val success: Boolean = false,

@@ -64,8 +64,8 @@ interface TowMastersApi {
     suspend fun sendMessage(@Body request: SendMessageRequest): Response<ApiResponse<ChatMessage>>
 
     // Dashboard
-    @GET("dashboard.php?action=stats")
-    suspend fun getDashboardStats(): Response<ApiResponse<DashboardStats>>
+    @GET("reports.php?action=dashboard")
+    suspend fun getDashboardStats(): Response<DashboardResponse>
 
     // Trucks
     @GET("trucks.php?action=list")
@@ -90,6 +90,10 @@ interface TowMastersApi {
     suspend fun getInspections(): Response<ListResponse<Inspection>>
 
     // Fuel Receipts
-    @GET("fuel-receipts.php?action=list")
+    @GET("fuel.php?action=list")
     suspend fun getFuelReceipts(): Response<ListResponse<FuelReceipt>>
+
+    // Device token for push notifications
+    @POST("auth.php?action=update-device-token")
+    suspend fun updateDeviceToken(@Body request: DeviceTokenRequest): Response<ApiResponse<Unit>>
 }

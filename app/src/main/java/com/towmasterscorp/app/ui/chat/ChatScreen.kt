@@ -44,7 +44,7 @@ fun ChatScreen(
             try {
                 val response = ApiClient.getApi().getMessages(otherUserId)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    messages = response.body()?.data ?: emptyList()
+                    messages = response.body()?.getItems() ?: emptyList()
                     if (messages.isNotEmpty()) {
                         val otherMsg = messages.firstOrNull { it.senderId == otherUserId }
                         if (otherMsg?.senderName != null) {
@@ -75,7 +75,7 @@ fun ChatScreen(
                     SendMessageRequest(to = otherUserId, message = text)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
-                    val newMessage = response.body()?.data
+                    val newMessage = response.body()?.getItem()
                     if (newMessage != null) {
                         messages = messages + newMessage
                     } else {

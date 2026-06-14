@@ -45,7 +45,7 @@ fun CallDetailScreen(
             try {
                 val response = ApiClient.getApi().getCall(callId)
                 if (response.isSuccessful && response.body()?.success == true) {
-                    call = response.body()?.data
+                    call = response.body()?.getItem()
                 } else {
                     error = response.body()?.error ?: "Failed to load call"
                 }
@@ -65,7 +65,7 @@ fun CallDetailScreen(
                     request = UpdateCallRequest(status = newStatus)
                 )
                 if (response.isSuccessful && response.body()?.success == true) {
-                    call = response.body()?.data ?: call?.copy(status = newStatus)
+                    call = response.body()?.getItem() ?: call?.copy(status = newStatus)
                 }
             } catch (e: Exception) {
                 error = e.localizedMessage

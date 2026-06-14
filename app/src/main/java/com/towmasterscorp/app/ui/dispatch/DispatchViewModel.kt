@@ -27,7 +27,7 @@ class DispatchViewModel : ViewModel() {
                 val response = ApiClient.getApi().getActiveCalls()
                 if (response.isSuccessful && response.body()?.success == true) {
                     _uiState.value = _uiState.value.copy(
-                        calls = response.body()?.data ?: emptyList(),
+                        calls = response.body()?.getItems() ?: emptyList(),
                         isLoading = false
                     )
                 } else {

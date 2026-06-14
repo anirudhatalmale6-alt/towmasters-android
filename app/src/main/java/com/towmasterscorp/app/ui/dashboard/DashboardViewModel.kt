@@ -26,8 +26,16 @@ class DashboardViewModel : ViewModel() {
             try {
                 val response = ApiClient.getApi().getDashboardStats()
                 if (response.isSuccessful && response.body()?.success == true) {
+                    val body = response.body()!!
+                    val stats = DashboardStats(
+                        todayCalls = body.today?.getTotalCalls() ?: 0,
+                        activeCalls = body.today?.getActive() ?: 0,
+                        completedToday = body.today?.getCompleted() ?: 0,
+                        todayRevenue = body.today?.getTotalRevenue() ?: 0.0,
+                        driversOnline = body.driversActive
+                    )
                     _uiState.value = _uiState.value.copy(
-                        stats = response.body()?.data,
+                        stats = stats,
                         isLoading = false
                     )
                 } else {
