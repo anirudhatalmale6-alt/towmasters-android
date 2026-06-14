@@ -30,7 +30,7 @@ fun MoreMenuScreen(
     onLogout: () -> Unit,
     onNavigateToChat: () -> Unit
 ) {
-    var isClockedIn by remember { mutableStateOf(user.isClockedIn) }
+    var isClockedIn by remember { mutableStateOf(user.clockedIn) }
     var isClockLoading by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()

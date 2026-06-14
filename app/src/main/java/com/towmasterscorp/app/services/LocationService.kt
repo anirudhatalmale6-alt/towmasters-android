@@ -91,7 +91,7 @@ class LocationService : Service() {
         serviceScope.launch {
             try {
                 ApiClient.getApi().updateLocation(
-                    LocationUpdate(latitude = latitude, longitude = longitude)
+                    LocationUpdate(lat = latitude, lng = longitude)
                 )
             } catch (e: Exception) {
                 // Silently fail - will retry on next update

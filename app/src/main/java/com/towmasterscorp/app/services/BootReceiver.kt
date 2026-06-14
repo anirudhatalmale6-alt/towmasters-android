@@ -18,7 +18,7 @@ class BootReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 val token = authPreferences.tokenFlow.first()
                 val user = authPreferences.userFlow.first()
-                if (!token.isNullOrEmpty() && user?.isClockedIn == true) {
+                if (!token.isNullOrEmpty() && user?.clockedIn == true) {
                     val serviceIntent = Intent(context, LocationService::class.java).apply {
                         action = LocationService.ACTION_START
                     }

@@ -3,41 +3,43 @@ package com.towmasterscorp.app.data.models
 import com.google.gson.annotations.SerializedName
 
 data class User(
-    @SerializedName("id") val id: Int,
-    @SerializedName("email") val email: String,
-    @SerializedName("first_name") val firstName: String,
-    @SerializedName("last_name") val lastName: String,
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("email") val email: String = "",
+    @SerializedName("first_name") val firstName: String = "",
+    @SerializedName("last_name") val lastName: String = "",
     @SerializedName("phone") val phone: String? = null,
-    @SerializedName("role") val role: String, // admin, dispatcher, driver, mechanic
+    @SerializedName("role") val role: String = "driver",
     @SerializedName("company_id") val companyId: Int? = null,
-    @SerializedName("status") val status: String? = null, // active, inactive
     @SerializedName("avatar_url") val avatarUrl: String? = null,
-    @SerializedName("is_clocked_in") val isClockedIn: Boolean = false,
+    @SerializedName("is_clocked_in") val isClockedIn: Int = 0,
+    @SerializedName("is_active") val isActive: Int = 1,
     @SerializedName("last_clock_in") val lastClockIn: String? = null,
     @SerializedName("last_clock_out") val lastClockOut: String? = null,
-    @SerializedName("latitude") val latitude: Double? = null,
-    @SerializedName("longitude") val longitude: Double? = null,
-    @SerializedName("location_updated_at") val locationUpdatedAt: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerializedName("last_lat") val lastLat: Double? = null,
+    @SerializedName("last_lng") val lastLng: Double? = null,
+    @SerializedName("last_location_at") val lastLocationAt: String? = null,
+    @SerializedName("location_id") val locationId: Int? = null,
+    @SerializedName("location_name") val locationName: String? = null,
+    @SerializedName("commission_rate") val commissionRate: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
 ) {
     val fullName: String get() = "$firstName $lastName"
     val isAdmin: Boolean get() = role == "admin"
     val isDispatcher: Boolean get() = role == "dispatcher" || role == "admin"
     val isDriver: Boolean get() = role == "driver"
+    val clockedIn: Boolean get() = isClockedIn != 0
 }
 
 data class Company(
-    @SerializedName("id") val id: Int,
-    @SerializedName("name") val name: String,
+    @SerializedName("id") val id: Int = 0,
+    @SerializedName("name") val name: String = "",
+    @SerializedName("slug") val slug: String? = null,
     @SerializedName("phone") val phone: String? = null,
     @SerializedName("email") val email: String? = null,
-    @SerializedName("address") val address: String? = null,
-    @SerializedName("city") val city: String? = null,
-    @SerializedName("state") val state: String? = null,
-    @SerializedName("zip") val zip: String? = null,
-    @SerializedName("logo_url") val logoUrl: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("subscription_plan") val subscriptionPlan: String? = null,
+    @SerializedName("subscription_status") val subscriptionStatus: String? = null,
+    @SerializedName("trial_expired") val trialExpired: Boolean? = null,
+    @SerializedName("trial_days_remaining") val trialDaysRemaining: Int? = null
 )
 
 data class LoginRequest(
@@ -46,6 +48,6 @@ data class LoginRequest(
 )
 
 data class LocationUpdate(
-    val latitude: Double,
-    val longitude: Double
+    val lat: Double,
+    val lng: Double
 )
