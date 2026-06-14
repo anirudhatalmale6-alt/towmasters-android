@@ -192,19 +192,11 @@ fun LoginScreen(
                             containerColor = Secondary
                         )
                     ) {
-                        if (uiState.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onSecondary,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                text = "Sign In",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        Text(
+                            text = if (uiState.isLoading) "Signing in..." else "Sign In",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }

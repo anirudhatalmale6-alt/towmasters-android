@@ -65,25 +65,18 @@ class LoginViewModel(
     }
 
     fun login() {
-        try {
-            loginInternal()
-        } catch (e: Exception) {
-            Log.e("LoginVM", "Login crashed", e)
-            _uiState.value = _uiState.value.copy(isLoading = false, error = "App error: ${e.message}")
-        }
-    }
-
-    private fun loginInternal() {
         val state = _uiState.value
         if (state.email.isBlank() || state.password.isBlank()) {
             _uiState.value = state.copy(error = "Please enter email and password")
             return
         }
-
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        if (state.isLoading) return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                }
                 val url = java.net.URL("https://app.towmasterscorp.com/api/auth.php?action=login")
                 val connection = url.openConnection() as java.net.HttpURLConnection
                 connection.requestMethod = "POST"
