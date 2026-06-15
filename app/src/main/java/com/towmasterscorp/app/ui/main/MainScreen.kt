@@ -760,7 +760,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                             val ch = chargesArr.getJSONObject(j)
                             val desc = ch.optString("description", null)
                             val chargeType = ch.optString("charge_type", "Charge")
-                            val displayName = if (!desc.isNullOrEmpty() && desc != "null") desc else chargeType
+                            val displayName = if (!desc.isNullOrEmpty() && desc != "null") desc else formatDisplayName(chargeType)
                             val hours = ch.optDouble("hours", 0.0)
                             val rate = ch.optDouble("rate", 0.0)
                             val total = ch.optDouble("total", 0.0)
@@ -1286,7 +1286,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF333333), modifier = Modifier.width(80.dp))
-                                Text(dateStr, fontSize = 12.sp, color = Color(0xFF8E8E93))
+                                Text(formatTimestamp(dateStr), fontSize = 12.sp, color = Color(0xFF8E8E93))
                             }
                         }
                     }
@@ -1544,6 +1544,31 @@ fun EditField(label: String, value: String, onValueChange: (String) -> Unit) {
             unfocusedContainerColor = Color(0xFFF9F9F9)
         )
     )
+}
+
+private fun formatTimestamp(dateStr: String): String {
+    val months = arrayOf("January","February","March","April","May","June","July","August","September","October","November","December")
+    return try {
+        val parts = dateStr.split(" ", "T")
+        val datePart = parts[0].split("-")
+        val timePart = if (parts.size > 1) parts[1].split(":") else null
+        val year = datePart[0].toInt()
+        val month = datePart[1].toInt()
+        val day = datePart[2].toInt()
+        var result = "${months[month - 1]} $day, $year"
+        if (timePart != null) {
+            val hour = timePart[0].toInt()
+            val min = timePart[1]
+            val amPm = if (hour >= 12) "PM" else "AM"
+            val h12 = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
+            result += " $h12:$min $amPm"
+        }
+        result
+    } catch (_: Exception) { dateStr }
+}
+
+private fun formatDisplayName(name: String): String {
+    return name.replace("_", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
 }
 
 private fun formatAmount(value: Any?): String {
@@ -2015,7 +2040,7 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
                                     Text(insp.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     val status = insp.optString("status", "pending")
                                     val sColor = when { status.contains("pass") -> Color(0xFF34C759); status.contains("fail") -> Color(0xFFFF3B30); else -> Color(0xFFFF9500) }
-                                    Text(status.replaceFirstChar { it.uppercase() }, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = sColor,
+                                    Text(formatDisplayName(status), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = sColor,
                                         modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
                                 }
                                 val driverName = insp.optString("driver_name", "")
@@ -2051,7 +2076,7 @@ fun InspectionDetailScreen(inspection: org.json.JSONObject, onBack: () -> Unit) 
                         val truckInfo = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() && it != "null" && it != "0" }.joinToString(" ")
                         if (truckInfo.isNotEmpty()) Text(truckInfo, fontSize = 14.sp, color = Color(0xFF8E8E93))
                     }
-                    Text(status.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = sColor,
+                    Text(formatDisplayName(status), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = sColor,
                         modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -2096,6 +2121,28 @@ fun InspectionDetailScreen(inspection: org.json.JSONObject, onBack: () -> Unit) 
                     Text(notes, fontSize = 14.sp)
                 }
             }
+
+            val positions = listOf("front" to "Front", "back" to "Back", "left" to "Left Side", "right" to "Right Side")
+            val hasPhotos = positions.any { (pos, _) ->
+                val url = inspection.optString("photo_${pos}_url", "")
+                url.isNotEmpty() && url != "null"
+            }
+            if (hasPhotos) {
+                DetailSection {
+                    SectionTitle(Icons.Default.PhotoCamera, "Photos")
+                    Spacer(modifier = Modifier.height(6.dp))
+                    positions.forEach { (pos, label) ->
+                        val url = inspection.optString("photo_${pos}_url", "")
+                        if (url.isNotEmpty() && url != "null") {
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(label, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                                Text("Photo attached", fontSize = 13.sp, color = Color(0xFF34C759))
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
@@ -2316,7 +2363,7 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                                             val fname = "inspection_${inspectionId}_${position}_${System.currentTimeMillis()}.jpg"
                                             apiMultipartUpload(
                                                 endpoint = "inspections.php?action=upload-photo",
-                                                fields = mapOf("id" to inspectionId.toString(), "position" to position),
+                                                fields = mapOf("inspection_id" to inspectionId.toString(), "position" to position),
                                                 fileFieldName = "photo",
                                                 imageBytes = bytes,
                                                 fileName = fname
@@ -2507,6 +2554,16 @@ fun FuelReceiptDetailScreen(receipt: org.json.JSONObject, onBack: () -> Unit) {
                     Text(notes, fontSize = 14.sp)
                 }
             }
+
+            val photoPath = receipt.optString("photo_path", "")
+            if (photoPath.isNotEmpty() && photoPath != "null") {
+                DetailSection {
+                    SectionTitle(Icons.Default.PhotoCamera, "Receipt Photo")
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Receipt photo attached", fontSize = 13.sp, color = Color(0xFF34C759))
+                }
+            }
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
@@ -2521,10 +2578,14 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
     var placeName by remember { mutableStateOf("") }
     var mileage by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    var receiptDate by remember {
+    var receiptDateDisplay by remember {
         val cal = java.util.Calendar.getInstance()
         val months = arrayOf("January","February","March","April","May","June","July","August","September","October","November","December")
         mutableStateOf("${months[cal.get(java.util.Calendar.MONTH)]} ${cal.get(java.util.Calendar.DAY_OF_MONTH)}, ${cal.get(java.util.Calendar.YEAR)}")
+    }
+    var receiptDate by remember {
+        val cal = java.util.Calendar.getInstance()
+        mutableStateOf(String.format("%04d-%02d-%02d", cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH)))
     }
     var fuelType by remember { mutableStateOf("regular") }
     var stationAddress by remember { mutableStateOf("") }
@@ -2577,7 +2638,7 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                 Text("Fuel Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
 
                 // Change #11: Date field
-                EditField("Date (YYYY-MM-DD)", receiptDate) { receiptDate = it }
+                EditField("Date", receiptDateDisplay) { receiptDateDisplay = it }
 
                 // Change #11: Fuel type selector
                 Text("Fuel Type", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
@@ -2662,8 +2723,8 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                                     if (bytes != null) {
                                         val fname = "fuel_receipt_${receiptId}_${System.currentTimeMillis()}.jpg"
                                         apiMultipartUpload(
-                                            endpoint = "fuel.php?action=upload-photo",
-                                            fields = mapOf("id" to receiptId.toString()),
+                                            endpoint = "fuel.php?action=upload-photo&id=$receiptId",
+                                            fields = emptyMap(),
                                             fileFieldName = "photo",
                                             imageBytes = bytes,
                                             fileName = fname
@@ -2696,6 +2757,8 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
     var priority by remember { mutableStateOf("normal") }
     var callerName by remember { mutableStateOf("") }
     var callerPhone by remember { mutableStateOf("") }
+    var contactName by remember { mutableStateOf("") }
+    var contactPhone by remember { mutableStateOf("") }
     var vehicleYear by remember { mutableStateOf("") }
     var vehicleMake by remember { mutableStateOf("") }
     var vehicleModel by remember { mutableStateOf("") }
@@ -2747,13 +2810,13 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
     var mileageField by remember { mutableStateOf("") }
     data class ExtraCharge(val chargeType: String = "service_call", val rate: String = "", val hours: String = "")
     val additionalCharges = remember { mutableStateListOf<ExtraCharge>() }
-    val chargeTypeOptions = listOf("hourly_charge", "service_call", "heavy_duty_call", "light_duty_call", "winch_out", "recovery", "fuel_surcharge", "storage", "admin_fee", "other")
+    val chargeTypeOptions = listOf("service_call", "heavy_duty_call", "medium_duty_call", "light_duty_call", "driveline_remove_reinstall", "heavy_duty_recovery", "medium_duty_recovery", "light_duty_recovery", "hook_fee", "hourly_charge", "other")
 
     // Additional drivers
     data class ExtraDriver(val driverId: String = "", val truckId: String = "")
     val additionalDrivers = remember { mutableStateListOf<ExtraDriver>() }
 
-    val callTypes = listOf("tow", "jumpstart", "lockout", "tire_change", "fuel_delivery", "winch", "transport", "impound", "recovery", "other")
+    val callTypes = listOf("tow", "jumpstart", "lockout", "tire_change", "fuel_delivery", "winch", "transport", "impound", "illegal_park", "abandoned", "lift", "recovery", "other")
     val priorities = listOf("low", "normal", "high", "urgent")
 
     fun searchCustomers(query: String) {
@@ -2948,6 +3011,10 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     Text("Caller", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     EditField("Caller Name", callerName) { callerName = it }
                     EditField("Caller Phone", callerPhone) { callerPhone = it }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Contact Person", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    EditField("Contact Name", contactName) { contactName = it }
+                    EditField("Contact Phone", contactPhone) { contactPhone = it }
                 }
 
                 // Primary Vehicle info with VIN decode
@@ -3164,7 +3231,7 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         row.forEach { ct ->
                                             val sel = charge.chargeType == ct
-                                            val displayLabel = ct.replace("_", " ").replaceFirstChar { it.uppercase() }
+                                            val displayLabel = formatDisplayName(ct)
                                             Text(displayLabel, fontSize = 10.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
                                                 color = if (sel) Color.White else Color(0xFF007AFF),
                                                 modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
@@ -3194,6 +3261,8 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                             body.put("priority", priority)
                             if (callerName.isNotEmpty()) body.put("caller_name", callerName)
                             if (callerPhone.isNotEmpty()) body.put("caller_phone", callerPhone)
+                            if (contactName.isNotEmpty()) body.put("contact_name", contactName)
+                            if (contactPhone.isNotEmpty()) body.put("contact_phone", contactPhone)
                             if (vehicleYear.isNotEmpty()) body.put("vehicle_year", vehicleYear)
                             if (vehicleMake.isNotEmpty()) body.put("vehicle_make", vehicleMake)
                             if (vehicleModel.isNotEmpty()) body.put("vehicle_model", vehicleModel)
