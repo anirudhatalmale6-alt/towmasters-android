@@ -3750,14 +3750,11 @@ $markers
                                         val intent = Intent(Intent.ACTION_VIEW, uri)
                                         try { context.startActivity(intent) } catch (_: Exception) {}
                                     }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                                )
-                            }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
