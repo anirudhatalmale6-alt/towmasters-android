@@ -180,7 +180,7 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
             }
         } else if (error != null) {
             Text(text = "Error: $error", color = Color.Red, modifier = Modifier.padding(16.dp))

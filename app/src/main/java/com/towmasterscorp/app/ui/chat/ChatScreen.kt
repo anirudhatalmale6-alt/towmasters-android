@@ -165,7 +165,7 @@ fun ChatScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else {
             LazyColumn(

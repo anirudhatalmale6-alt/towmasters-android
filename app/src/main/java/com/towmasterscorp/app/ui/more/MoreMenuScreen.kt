@@ -188,7 +188,7 @@ fun MoreMenuScreen(
                         }
                     }
                     if (isClockLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Text("...", color = Color.Gray)
                     } else {
                         Switch(
                             checked = isClockedIn,

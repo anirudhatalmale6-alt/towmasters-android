@@ -100,7 +100,7 @@ fun CallsListScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else if (uiState.filteredCalls.isEmpty()) {
             Box(

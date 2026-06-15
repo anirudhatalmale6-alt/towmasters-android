@@ -103,7 +103,7 @@ fun DriverJobsScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else if (calls.isEmpty()) {
             Box(
@@ -288,11 +288,7 @@ fun DriverJobCard(
                     )
                 ) {
                     if (isUpdating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = OnPrimary,
-                            strokeWidth = 2.dp
-                        )
+                        Text("...", color = OnPrimary)
                     } else {
                         Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))

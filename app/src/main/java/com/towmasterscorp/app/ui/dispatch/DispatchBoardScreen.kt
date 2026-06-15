@@ -55,7 +55,7 @@ fun DispatchBoardScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else if (uiState.calls.isEmpty()) {
             Box(

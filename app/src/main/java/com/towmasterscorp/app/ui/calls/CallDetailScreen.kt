@@ -105,7 +105,7 @@ fun CallDetailScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else if (call == null) {
             Box(
@@ -274,11 +274,7 @@ fun CallDetailScreen(
                             )
                         ) {
                             if (isUpdating) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    color = OnPrimary,
-                                    strokeWidth = 2.dp
-                                )
+                                Text("...", color = OnPrimary)
                             } else {
                                 Icon(Icons.Default.ChevronRight, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))

@@ -98,7 +98,7 @@ fun DashboardScreen(user: User) {
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
             }
         }
 

@@ -80,7 +80,7 @@ fun ChatListScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Text("Loading...", color = Color.Gray)
             }
         } else if (conversations.isEmpty()) {
             Box(
