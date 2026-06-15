@@ -80,6 +80,13 @@ fun DashboardScreen(user: User) {
         loadDashboard()
     }
 
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(30000)
+            loadDashboard()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

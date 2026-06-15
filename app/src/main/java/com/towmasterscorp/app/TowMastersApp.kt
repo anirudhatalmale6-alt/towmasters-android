@@ -4,6 +4,8 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import com.towmasterscorp.app.services.FCMService
@@ -49,12 +51,19 @@ class TowMastersApp : Application() {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
             // Main notification channel
+            val soundUri = Uri.parse("android.resource://${packageName}/${R.raw.alarm_tone}")
+            val audioAttr = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
             val mainChannel = NotificationChannel(
                 FCMService.CHANNEL_ID,
                 "TowMasters Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Dispatch notifications and call updates"
+                setSound(soundUri, audioAttr)
                 enableVibration(true)
                 enableLights(true)
             }
