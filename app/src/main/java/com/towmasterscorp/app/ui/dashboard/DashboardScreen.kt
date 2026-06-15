@@ -1,5 +1,6 @@
 package com.towmasterscorp.app.ui.dashboard
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +16,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.theme.*
 import java.text.NumberFormat
@@ -24,16 +25,33 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(user: User) {
-    val viewModel: DashboardViewModel = viewModel()
-    val uiState by viewModel.uiState.collectAsState()
+    var todayCalls by remember { mutableIntStateOf(0) }
+    var activeCalls by remember { mutableIntStateOf(0) }
+    var completedToday by remember { mutableIntStateOf(0) }
+    var todayRevenue by remember { mutableStateOf(0.0) }
+    var driversOnline by remember { mutableIntStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        viewModel.loadStats()
+        try {
+            val response = ApiClient.getApi().getDashboardStats()
+            if (response.isSuccessful && response.body()?.success == true) {
+                val body = response.body()!!
+                todayCalls = body.today?.getTotalCalls() ?: 0
+                activeCalls = body.today?.getActive() ?: 0
+                completedToday = body.today?.getCompleted() ?: 0
+                todayRevenue = body.today?.getTotalRevenue() ?: 0.0
+                driversOnline = body.driversActive
+            }
+        } catch (e: Exception) {
+            Log.e("Dashboard", "Failed to load stats", e)
+            error = e.message
+        }
+        isLoading = false
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
                 Column {
@@ -50,11 +68,8 @@ fun DashboardScreen(user: User) {
             )
         )
 
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
@@ -63,210 +78,70 @@ fun DashboardScreen(user: User) {
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Today's Stats Row
-                Text(
-                    text = "Today's Overview",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("Today's Overview", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Total Calls",
-                        value = "${uiState.stats?.todayCalls ?: 0}",
-                        icon = Icons.Default.Phone,
-                        color = Primary
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Active",
-                        value = "${uiState.stats?.activeCalls ?: 0}",
-                        icon = Icons.Default.DirectionsCar,
-                        color = Secondary
-                    )
+                    StatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Icons.Default.Phone, Primary)
+                    StatCard(Modifier.weight(1f), "Active", "$activeCalls", Icons.Default.DirectionsCar, Secondary)
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Completed",
-                        value = "${uiState.stats?.completedToday ?: 0}",
-                        icon = Icons.Default.CheckCircle,
-                        color = Success
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Cancelled",
-                        value = "${0}",
-                        icon = Icons.Default.Cancel,
-                        color = Error
-                    )
+                    StatCard(Modifier.weight(1f), "Completed", "$completedToday", Icons.Default.CheckCircle, Success)
+                    StatCard(Modifier.weight(1f), "Drivers Online", "$driversOnline", Icons.Default.Person, Info)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-
-                // Revenue
-                Text(
-                    text = "Revenue",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("Revenue", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        RevenueRow("Today", uiState.stats?.todayRevenue ?: 0.0)
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        RevenueRow("This Week", 0.0)
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-                        RevenueRow("This Month", 0.0)
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        val formatter = NumberFormat.getCurrencyInstance(Locale.US)
+                        Text(
+                            text = "Today: ${formatter.format(todayRevenue)}",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Success
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Drivers
-                Text(
-                    text = "Drivers",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Online",
-                        value = "${uiState.stats?.driversOnline ?: 0}",
-                        icon = Icons.Default.Person,
-                        color = Success
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Total",
-                        value = "${0}",
-                        icon = Icons.Default.Group,
-                        color = Info
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Avg Response",
-                        value = "${0} min",
-                        icon = Icons.Default.Timer,
-                        color = Warning
-                    )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Pending Invoices",
-                        value = "${0}",
-                        icon = Icons.Default.Receipt,
-                        color = StatusDispatched
-                    )
+                if (error != null) {
+                    Text(text = "Note: $error", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
-
-        // Error
-        if (uiState.error != null) {
-            Snackbar(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(uiState.error!!)
-            }
-        }
     }
 }
 
 @Composable
-fun StatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    icon: ImageVector,
-    color: Color
-) {
+fun StatCard(modifier: Modifier = Modifier, title: String, value: String, icon: ImageVector, color: Color) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = color,
-                modifier = Modifier.size(28.dp)
-            )
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = value,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(text = title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-fun RevenueRow(label: String, amount: Double) {
-    val formatter = NumberFormat.getCurrencyInstance(Locale.US)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = formatter.format(amount),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Success
-        )
     }
 }

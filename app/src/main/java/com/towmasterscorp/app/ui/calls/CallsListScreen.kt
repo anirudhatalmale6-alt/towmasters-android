@@ -57,7 +57,7 @@ fun CallsListScreen(
             trailingIcon = {
                 if (uiState.searchQuery.isNotEmpty()) {
                     IconButton(onClick = { viewModel.updateSearch("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        Icon(Icons.Default.Close, contentDescription = "Clear")
                     }
                 }
             },
@@ -108,7 +108,7 @@ fun CallsListScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.PhoneDisabled,
+                        Icons.Default.Phone,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant

@@ -184,7 +184,7 @@ fun CallDetailScreen(
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
-                            Icons.Default.TripOrigin,
+                            Icons.Default.Star,
                             contentDescription = null,
                             tint = Success,
                             modifier = Modifier.size(20.dp)
@@ -201,7 +201,7 @@ fun CallDetailScreen(
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
-                            Icons.Default.Place,
+                            Icons.Default.LocationOn,
                             contentDescription = null,
                             tint = Error,
                             modifier = Modifier.size(20.dp)
@@ -279,7 +279,7 @@ fun CallDetailScreen(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Icon(Icons.Default.ArrowForward, contentDescription = null)
+                                Icon(Icons.Default.ChevronRight, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     "Update to ${currentCall.nextStatusDisplayName}",

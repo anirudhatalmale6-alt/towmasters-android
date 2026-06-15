@@ -213,14 +213,14 @@ fun MoreMenuScreen(
             }
 
             if (user.isDispatcher) {
-                MenuItem(Icons.Default.People, "Customers", "Manage customers") {}
-                MenuItem(Icons.Default.Receipt, "Invoices", "View invoices") {}
-                MenuItem(Icons.Default.LocalShipping, "Trucks", "Fleet management") {}
-                MenuItem(Icons.Default.Warehouse, "Impound Lot", "Stored vehicles") {}
+                MenuItem(Icons.Default.Person, "Customers", "Manage customers") {}
+                MenuItem(Icons.Default.Description, "Invoices", "View invoices") {}
+                MenuItem(Icons.Default.DirectionsCar, "Trucks", "Fleet management") {}
+                MenuItem(Icons.Default.Home, "Impound Lot", "Stored vehicles") {}
             }
 
-            MenuItem(Icons.Default.Checklist, "Inspections", "Vehicle inspections") {}
-            MenuItem(Icons.Default.LocalGasStation, "Fuel Receipts", "Fuel log") {}
+            MenuItem(Icons.Default.CheckCircle, "Inspections", "Vehicle inspections") {}
+            MenuItem(Icons.Default.Star, "Fuel Receipts", "Fuel log") {}
 
             Spacer(modifier = Modifier.height(16.dp))
 

@@ -111,7 +111,7 @@ fun DriverJobsScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.WorkOff,
+                        Icons.Default.Work,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -231,7 +231,7 @@ fun DriverJobCard(
             // Pickup
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
-                    Icons.Default.TripOrigin,
+                    Icons.Default.Star,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = Success
@@ -248,7 +248,7 @@ fun DriverJobCard(
             // Dropoff
             Row(verticalAlignment = Alignment.Top) {
                 Icon(
-                    Icons.Default.Place,
+                    Icons.Default.LocationOn,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = Error
@@ -293,7 +293,7 @@ fun DriverJobCard(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "Mark as ${call.nextStatusDisplayName}",
