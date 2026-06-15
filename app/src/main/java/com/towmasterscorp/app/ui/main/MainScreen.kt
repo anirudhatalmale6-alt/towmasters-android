@@ -1,6 +1,9 @@
 package com.towmasterscorp.app.ui.main
 
+import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1016,14 +1020,74 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                     if (c.vehicleVinSafe != null) DetailRow("VIN", c.vehicleVinSafe!!)
                 }
 
-                // Change #6: Photos Section
+                // Change #6: Photos Section with upload
                 DetailSection {
+                    val photoContext = LocalContext.current
+                    var isUploadingPhotos by remember { mutableStateOf(false) }
+                    var photoUploadMsg by remember { mutableStateOf<String?>(null) }
+
+                    val photoPickerLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.GetMultipleContents()
+                    ) { uris: List<Uri> ->
+                        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+                        isUploadingPhotos = true
+                        photoUploadMsg = "Uploading ${uris.size} photo${if (uris.size > 1) "s" else ""}..."
+                        Thread {
+                            var successCount = 0
+                            uris.forEachIndexed { idx, uri ->
+                                try {
+                                    val inputStream = photoContext.contentResolver.openInputStream(uri)
+                                    val bytes = inputStream?.readBytes() ?: return@forEachIndexed
+                                    inputStream.close()
+                                    val fname = "call_${callId}_photo_${idx}_${System.currentTimeMillis()}.jpg"
+                                    val (code, _) = apiMultipartUpload(
+                                        endpoint = "photos.php?action=upload",
+                                        fields = mapOf("call_id" to callId.toString(), "photo_type" to "vehicle"),
+                                        fileFieldName = "photo",
+                                        imageBytes = bytes,
+                                        fileName = fname
+                                    )
+                                    if (code in 200..299) successCount++
+                                } catch (e: Exception) {
+                                    Log.e("PhotoUpload", "Failed to upload photo $idx", e)
+                                }
+                            }
+                            handler.post {
+                                isUploadingPhotos = false
+                                photoUploadMsg = if (successCount > 0) "$successCount photo${if (successCount > 1) "s" else ""} uploaded!" else "Upload failed"
+                                loadCall()
+                            }
+                        }.start()
+                    }
+
                     SectionTitle(Icons.Default.PhotoCamera, "Photos")
                     Spacer(modifier = Modifier.height(6.dp))
                     if (photosCount > 0) {
                         Text("$photosCount photo${if (photosCount != 1) "s" else ""} attached", fontSize = 14.sp, color = Color(0xFF007AFF))
                     } else {
                         Text("No photos attached", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isUploadingPhotos,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
+                    ) {
+                        Text(
+                            if (isUploadingPhotos) "Uploading..." else "Upload Photos",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (photoUploadMsg != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            photoUploadMsg!!,
+                            fontSize = 13.sp,
+                            color = if (photoUploadMsg!!.contains("uploaded")) Color(0xFF34C759) else if (photoUploadMsg!!.contains("failed")) Color.Red else Color(0xFF8E8E93)
+                        )
                     }
                 }
 
@@ -1682,6 +1746,66 @@ fun apiPost(endpoint: String, body: org.json.JSONObject): Pair<Int, String> {
     } catch (e: Exception) { 0 to (e.message ?: "Network error") }
 }
 
+/**
+ * Reusable multipart upload helper.
+ * @param endpoint API endpoint (e.g. "photos.php?action=upload")
+ * @param fields Map of text form fields
+ * @param fileFieldName The form field name for the file (e.g. "photo")
+ * @param imageBytes The raw image bytes
+ * @param fileName The file name (e.g. "photo.jpg")
+ * @return Pair of HTTP status code and response body text
+ */
+fun apiMultipartUpload(
+    endpoint: String,
+    fields: Map<String, String>,
+    fileFieldName: String,
+    imageBytes: ByteArray,
+    fileName: String
+): Pair<Int, String> {
+    return try {
+        val boundary = "----FormBoundary${System.currentTimeMillis()}"
+        val crlf = "\r\n"
+        val url = java.net.URL("https://app.towmasterscorp.com/api/$endpoint")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        conn.doOutput = true
+        conn.connectTimeout = 30000
+        conn.readTimeout = 30000
+        val os = conn.outputStream
+        // Write text fields
+        for ((key, value) in fields) {
+            os.write("--$boundary$crlf".toByteArray())
+            os.write("Content-Disposition: form-data; name=\"$key\"$crlf".toByteArray())
+            os.write(crlf.toByteArray())
+            os.write(value.toByteArray())
+            os.write(crlf.toByteArray())
+        }
+        // Write file field
+        os.write("--$boundary$crlf".toByteArray())
+        os.write("Content-Disposition: form-data; name=\"$fileFieldName\"; filename=\"$fileName\"$crlf".toByteArray())
+        os.write("Content-Type: image/jpeg$crlf".toByteArray())
+        os.write(crlf.toByteArray())
+        os.write(imageBytes)
+        os.write(crlf.toByteArray())
+        // Close boundary
+        os.write("--$boundary--$crlf".toByteArray())
+        os.flush()
+        os.close()
+        val code = conn.responseCode
+        val text = try {
+            if (code in 200..299) conn.inputStream.bufferedReader().readText()
+            else conn.errorStream?.bufferedReader()?.readText() ?: ""
+        } catch (_: Exception) { "" }
+        conn.disconnect()
+        code to text
+    } catch (e: Exception) {
+        Log.e("MultipartUpload", "Upload failed", e)
+        0 to (e.message ?: "Upload error")
+    }
+}
+
 @Composable
 fun ChatScreen(user: User, onBack: () -> Unit) {
     var conversations by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
@@ -1994,6 +2118,18 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
 
     val fuelLevels = listOf("full" to "Full", "three_quarter" to "3/4", "half" to "1/2", "quarter" to "1/4", "empty" to "Empty")
 
+    // Photo upload state for 4 positions
+    val inspContext = LocalContext.current
+    var frontPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var backPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var leftPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var rightPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    val frontPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) frontPhotoUri = uri }
+    val backPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) backPhotoUri = uri }
+    val leftPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) leftPhotoUri = uri }
+    val rightPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) rightPhotoUri = uri }
+
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
         ScreenHeader("New Inspection", onBack)
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2066,10 +2202,94 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                     }
                 }
             }
+
+            // Inspection Photos
+            DetailSection {
+                Text("Photos", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Attach photos for each side of the vehicle", fontSize = 12.sp, color = Color(0xFF8E8E93))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Front photo
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Front", fontSize = 14.sp)
+                    if (frontPhotoUri != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Selected", fontSize = 12.sp, color = Color(0xFF34C759))
+                            Text("X", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { frontPhotoUri = null }.padding(4.dp))
+                        }
+                    } else {
+                        Text("Pick Photo", fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { frontPicker.launch("image/*") }
+                                .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+
+                // Back photo
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Back", fontSize = 14.sp)
+                    if (backPhotoUri != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Selected", fontSize = 12.sp, color = Color(0xFF34C759))
+                            Text("X", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { backPhotoUri = null }.padding(4.dp))
+                        }
+                    } else {
+                        Text("Pick Photo", fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { backPicker.launch("image/*") }
+                                .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+
+                // Left Side photo
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Left Side", fontSize = 14.sp)
+                    if (leftPhotoUri != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Selected", fontSize = 12.sp, color = Color(0xFF34C759))
+                            Text("X", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { leftPhotoUri = null }.padding(4.dp))
+                        }
+                    } else {
+                        Text("Pick Photo", fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { leftPicker.launch("image/*") }
+                                .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+
+                // Right Side photo
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Right Side", fontSize = 14.sp)
+                    if (rightPhotoUri != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Selected", fontSize = 12.sp, color = Color(0xFF34C759))
+                            Text("X", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { rightPhotoUri = null }.padding(4.dp))
+                        }
+                    } else {
+                        Text("Pick Photo", fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { rightPicker.launch("image/*") }
+                                .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+            }
+
             EditField("Notes", notes) { notes = it }
             Button(onClick = {
                 if (selectedTruckId.isEmpty() || isSaving) return@Button
                 isSaving = true; saveMsg = null
+                val photoUris = mapOf(
+                    "front" to frontPhotoUri,
+                    "back" to backPhotoUri,
+                    "left" to leftPhotoUri,
+                    "right" to rightPhotoUri
+                )
+                val ctx = inspContext
                 Thread {
                     val body = org.json.JSONObject()
                     body.put("truck_id", selectedTruckId.toInt())
@@ -2078,8 +2298,40 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                     body.put("fuel_level", fuelLevel)
                     body.put("notes", notes)
                     checkItems.forEach { body.put(it, checkStates[it] ?: 1) }
-                    val (code, _) = apiPost("inspections.php?action=create", body)
-                    handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
+                    val (code, respText) = apiPost("inspections.php?action=create", body)
+                    if (code in 200..299) {
+                        // Parse inspection_id from response and upload photos
+                        val inspectionId = try {
+                            val respJson = org.json.JSONObject(respText)
+                            respJson.optInt("inspection_id", respJson.optInt("id", 0))
+                        } catch (_: Exception) { 0 }
+                        if (inspectionId > 0) {
+                            photoUris.forEach { (position, uri) ->
+                                if (uri != null) {
+                                    try {
+                                        val inputStream = ctx.contentResolver.openInputStream(uri)
+                                        val bytes = inputStream?.readBytes()
+                                        inputStream?.close()
+                                        if (bytes != null) {
+                                            val fname = "inspection_${inspectionId}_${position}_${System.currentTimeMillis()}.jpg"
+                                            apiMultipartUpload(
+                                                endpoint = "inspections.php?action=upload-photo",
+                                                fields = mapOf("id" to inspectionId.toString(), "position" to position),
+                                                fileFieldName = "photo",
+                                                imageBytes = bytes,
+                                                fileName = fname
+                                            )
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("InspectionPhoto", "Failed to upload $position photo", e)
+                                    }
+                                }
+                            }
+                        }
+                        handler.post { isSaving = false; onCreated() }
+                    } else {
+                        handler.post { isSaving = false; saveMsg = "Failed (HTTP $code)" }
+                    }
                 }.start()
             }, modifier = Modifier.fillMaxWidth(), enabled = selectedTruckId.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
@@ -2283,6 +2535,11 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
     var saveMsg by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
+    // Receipt photo
+    val fuelContext = LocalContext.current
+    var receiptPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    val receiptPhotoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) receiptPhotoUri = uri }
+
     val fuelTypes = listOf("regular" to "Regular", "mid_grade" to "Mid Grade", "premium" to "Premium", "diesel" to "Diesel", "def" to "DEF")
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
@@ -2347,9 +2604,33 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                 EditField("Truck Mileage", mileage) { mileage = it }
                 EditField("Notes", notes) { notes = it }
             }
+
+            // Receipt Photo
+            DetailSection {
+                Text("Receipt Photo", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Photo", fontSize = 14.sp)
+                    if (receiptPhotoUri != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Selected", fontSize = 12.sp, color = Color(0xFF34C759))
+                            Text("X", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { receiptPhotoUri = null }.padding(4.dp))
+                        }
+                    } else {
+                        Text("Pick Photo", fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { receiptPhotoPicker.launch("image/*") }
+                                .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
+            }
+
             Button(onClick = {
                 if (gallons.isEmpty() || isSaving) return@Button
                 isSaving = true; saveMsg = null
+                val photoUri = receiptPhotoUri
+                val ctx = fuelContext
                 Thread {
                     val body = org.json.JSONObject()
                     if (selectedTruckId.isNotEmpty()) body.put("truck_id", selectedTruckId.toInt())
@@ -2365,8 +2646,38 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                     if (stationCity.isNotEmpty()) body.put("station_city", stationCity)
                     if (stationState.isNotEmpty()) body.put("station_state", stationState)
                     if (stationZip.isNotEmpty()) body.put("station_zip", stationZip)
-                    val (code, _) = apiPost("fuel.php?action=create", body)
-                    handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
+                    val (code, respText) = apiPost("fuel.php?action=create", body)
+                    if (code in 200..299) {
+                        // Upload receipt photo if selected
+                        if (photoUri != null) {
+                            val receiptId = try {
+                                val respJson = org.json.JSONObject(respText)
+                                respJson.optInt("receipt_id", respJson.optInt("id", 0))
+                            } catch (_: Exception) { 0 }
+                            if (receiptId > 0) {
+                                try {
+                                    val inputStream = ctx.contentResolver.openInputStream(photoUri)
+                                    val bytes = inputStream?.readBytes()
+                                    inputStream?.close()
+                                    if (bytes != null) {
+                                        val fname = "fuel_receipt_${receiptId}_${System.currentTimeMillis()}.jpg"
+                                        apiMultipartUpload(
+                                            endpoint = "fuel.php?action=upload-photo",
+                                            fields = mapOf("id" to receiptId.toString()),
+                                            fileFieldName = "photo",
+                                            imageBytes = bytes,
+                                            fileName = fname
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("FuelPhoto", "Failed to upload receipt photo", e)
+                                }
+                            }
+                        }
+                        handler.post { isSaving = false; onCreated() }
+                    } else {
+                        handler.post { isSaving = false; saveMsg = "Failed (HTTP $code)" }
+                    }
                 }.start()
             }, modifier = Modifier.fillMaxWidth(), enabled = gallons.isNotEmpty() && selectedTruckId.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
@@ -2378,7 +2689,7 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
     }
 }
 
-// Change #13: Create Call Screen
+// Change #13: Create Call Screen - Enhanced with customer search, additional vehicles/addresses/charges/drivers
 @Composable
 fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) {
     var callType by remember { mutableStateOf("tow") }
@@ -2390,6 +2701,7 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
     var vehicleModel by remember { mutableStateOf("") }
     var vehicleColor by remember { mutableStateOf("") }
     var vehicleLicense by remember { mutableStateOf("") }
+    var plateState by remember { mutableStateOf("") }
     var vehicleVin by remember { mutableStateOf("") }
     var pickupAddress by remember { mutableStateOf("") }
     var pickupCity by remember { mutableStateOf("") }
@@ -2414,8 +2726,54 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
     var vinMessage by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
+    // Customer account search
+    var customerSearch by remember { mutableStateOf("") }
+    var customerResults by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var selectedCustomerId by remember { mutableStateOf<Int?>(null) }
+    var selectedCustomerName by remember { mutableStateOf("") }
+    var isSearchingCustomers by remember { mutableStateOf(false) }
+
+    // Additional vehicles
+    data class ExtraVehicle(val year: String = "", val make: String = "", val model: String = "", val color: String = "", val license: String = "", val plateState: String = "", val vin: String = "")
+    val additionalVehicles = remember { mutableStateListOf<ExtraVehicle>() }
+
+    // Additional addresses (stops)
+    data class ExtraAddress(val label: String = "", val address: String = "", val city: String = "", val state: String = "", val zip: String = "")
+    val additionalAddresses = remember { mutableStateListOf<ExtraAddress>() }
+
+    // Billing charges
+    var taxRate by remember { mutableStateOf("") }
+    var poNumber by remember { mutableStateOf("") }
+    var mileageField by remember { mutableStateOf("") }
+    data class ExtraCharge(val chargeType: String = "service_call", val rate: String = "", val hours: String = "")
+    val additionalCharges = remember { mutableStateListOf<ExtraCharge>() }
+    val chargeTypeOptions = listOf("hourly_charge", "service_call", "heavy_duty_call", "light_duty_call", "winch_out", "recovery", "fuel_surcharge", "storage", "admin_fee", "other")
+
+    // Additional drivers
+    data class ExtraDriver(val driverId: String = "", val truckId: String = "")
+    val additionalDrivers = remember { mutableStateListOf<ExtraDriver>() }
+
     val callTypes = listOf("tow", "jumpstart", "lockout", "tire_change", "fuel_delivery", "winch", "transport", "impound", "recovery", "other")
     val priorities = listOf("low", "normal", "high", "urgent")
+
+    fun searchCustomers(query: String) {
+        if (query.length < 3) { customerResults = emptyList(); return }
+        isSearchingCustomers = true
+        Thread {
+            try {
+                val text = apiGet("customers.php?action=list&search=${java.net.URLEncoder.encode(query, "UTF-8")}")
+                if (text != null) {
+                    val json = org.json.JSONObject(text)
+                    if (json.optBoolean("success")) {
+                        val arr = json.optJSONArray("customers") ?: org.json.JSONArray()
+                        val list = mutableListOf<org.json.JSONObject>()
+                        for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                        handler.post { customerResults = list; isSearchingCustomers = false }
+                    } else handler.post { customerResults = emptyList(); isSearchingCustomers = false }
+                } else handler.post { isSearchingCustomers = false }
+            } catch (_: Exception) { handler.post { isSearchingCustomers = false } }
+        }.start()
+    }
 
     fun decodeVin(vin: String) {
         if (vin.length != 17) return
@@ -2541,6 +2899,50 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     }
                 }
 
+                // Customer Account Search
+                DetailSection {
+                    Text("Customer Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (selectedCustomerId != null) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(selectedCustomerName, fontSize = 14.sp, color = Color(0xFF007AFF))
+                            Text("Clear", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { selectedCustomerId = null; selectedCustomerName = ""; customerSearch = "" }.padding(4.dp))
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = customerSearch,
+                            onValueChange = { newVal ->
+                                customerSearch = newVal
+                                searchCustomers(newVal)
+                            },
+                            label = { Text("Search customers (3+ chars)", fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color(0xFFD1D1D6), unfocusedContainerColor = Color(0xFFF9F9F9)),
+                            trailingIcon = {
+                                if (isSearchingCustomers) Text("...", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                            }
+                        )
+                        if (customerResults.isNotEmpty()) {
+                            Column(modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(8.dp)).padding(4.dp)) {
+                                customerResults.take(5).forEach { cust ->
+                                    val cId = cust.optInt("id")
+                                    val cName = cust.optString("company_name", cust.optString("name", "Customer #$cId"))
+                                    Row(modifier = Modifier.fillMaxWidth().clickable {
+                                        selectedCustomerId = cId
+                                        selectedCustomerName = cName
+                                        customerResults = emptyList()
+                                        customerSearch = cName
+                                    }.padding(vertical = 6.dp, horizontal = 8.dp)) {
+                                        Text(cName, fontSize = 13.sp, color = Color(0xFF333333))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Caller info
                 DetailSection {
                     Text("Caller", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -2548,14 +2950,15 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     EditField("Caller Phone", callerPhone) { callerPhone = it }
                 }
 
-                // Vehicle info with VIN decode
+                // Primary Vehicle info with VIN decode
                 DetailSection {
-                    Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Primary Vehicle", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     EditField("Year", vehicleYear) { vehicleYear = it }
                     EditField("Make", vehicleMake) { vehicleMake = it }
                     EditField("Model", vehicleModel) { vehicleModel = it }
                     EditField("Color", vehicleColor) { vehicleColor = it }
                     EditField("License Plate", vehicleLicense) { vehicleLicense = it }
+                    EditField("Plate State", plateState) { plateState = it }
                     OutlinedTextField(
                         value = vehicleVin,
                         onValueChange = { newVal ->
@@ -2585,6 +2988,28 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     }
                 }
 
+                // Additional Vehicles
+                if (additionalVehicles.isNotEmpty()) {
+                    additionalVehicles.forEachIndexed { idx, veh ->
+                        DetailSection {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Additional Vehicle ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("X Remove", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { additionalVehicles.removeAt(idx) }.padding(4.dp))
+                            }
+                            EditField("Year", veh.year) { additionalVehicles[idx] = veh.copy(year = it) }
+                            EditField("Make", veh.make) { additionalVehicles[idx] = veh.copy(make = it) }
+                            EditField("Model", veh.model) { additionalVehicles[idx] = veh.copy(model = it) }
+                            EditField("Color", veh.color) { additionalVehicles[idx] = veh.copy(color = it) }
+                            EditField("License Plate", veh.license) { additionalVehicles[idx] = veh.copy(license = it) }
+                            EditField("Plate State", veh.plateState) { additionalVehicles[idx] = veh.copy(plateState = it) }
+                            EditField("VIN", veh.vin) { additionalVehicles[idx] = veh.copy(vin = it) }
+                        }
+                    }
+                }
+                Text("+ Add Vehicle", fontSize = 14.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { additionalVehicles.add(ExtraVehicle()) }.padding(horizontal = 4.dp, vertical = 6.dp))
+
                 // Pickup
                 DetailSection {
                     Text("Pickup Location", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF34C759))
@@ -2593,6 +3018,26 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     EditField("State", pickupState) { pickupState = it }
                     EditField("Zip", pickupZip) { pickupZip = it }
                 }
+
+                // Additional Stops
+                if (additionalAddresses.isNotEmpty()) {
+                    additionalAddresses.forEachIndexed { idx, addr ->
+                        DetailSection {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Stop ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFFF9500))
+                                Text("X Remove", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { additionalAddresses.removeAt(idx) }.padding(4.dp))
+                            }
+                            EditField("Label", addr.label) { additionalAddresses[idx] = addr.copy(label = it) }
+                            EditField("Address", addr.address) { additionalAddresses[idx] = addr.copy(address = it) }
+                            EditField("City", addr.city) { additionalAddresses[idx] = addr.copy(city = it) }
+                            EditField("State", addr.state) { additionalAddresses[idx] = addr.copy(state = it) }
+                            EditField("Zip", addr.zip) { additionalAddresses[idx] = addr.copy(zip = it) }
+                        }
+                    }
+                }
+                Text("+ Add Stop", fontSize = 14.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { additionalAddresses.add(ExtraAddress()) }.padding(horizontal = 4.dp, vertical = 6.dp))
 
                 // Dropoff
                 DetailSection {
@@ -2603,7 +3048,7 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     EditField("Zip", dropoffZip) { dropoffZip = it }
                 }
 
-                // Driver assignment
+                // Primary Driver assignment
                 DetailSection {
                     Text("Assign Driver", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     if (drivers.isEmpty()) {
@@ -2622,7 +3067,7 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     }
                 }
 
-                // Truck assignment
+                // Primary Truck assignment
                 DetailSection {
                     Text("Assign Truck", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     if (trucks.isEmpty()) {
@@ -2649,14 +3094,94 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                     }
                 }
 
+                // Additional Drivers
+                if (additionalDrivers.isNotEmpty()) {
+                    additionalDrivers.forEachIndexed { idx, extraD ->
+                        DetailSection {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Additional Driver ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("X Remove", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { additionalDrivers.removeAt(idx) }.padding(4.dp))
+                            }
+                            Text("Driver", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                            drivers.forEach { driver ->
+                                val did = driver.optInt("id").toString()
+                                val dName = "${driver.optString("first_name", "")} ${driver.optString("last_name", "")}".trim()
+                                Row(modifier = Modifier.fillMaxWidth().clickable { additionalDrivers[idx] = extraD.copy(driverId = if (extraD.driverId == did) "" else did) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(if (extraD.driverId == did) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(dName, fontSize = 13.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Truck", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                            trucks.forEach { truck ->
+                                val tid = truck.optInt("id").toString()
+                                val unitNum = truck.optString("unit_number", "")
+                                Row(modifier = Modifier.fillMaxWidth().clickable { additionalDrivers[idx] = extraD.copy(truckId = if (extraD.truckId == tid) "" else tid) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(if (extraD.truckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(unitNum, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Text("+ Add Driver", fontSize = 14.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { additionalDrivers.add(ExtraDriver()) }.padding(horizontal = 4.dp, vertical = 6.dp))
+
                 // Notes & Rates
                 DetailSection {
                     Text("Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     EditField("Dispatch Notes", dispatchNotes) { dispatchNotes = it }
                     EditField("Reason for Tow", reasonForTow) { reasonForTow = it }
+                }
+
+                // Billing section
+                DetailSection {
+                    Text("Billing", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF34C759))
                     EditField("Base Rate", baseRate) { baseRate = it }
                     EditField("Mileage Rate", mileageRate) { mileageRate = it }
+                    EditField("Mileage", mileageField) { mileageField = it }
+                    EditField("Tax Rate (%)", taxRate) { taxRate = it }
+                    EditField("PO Number", poNumber) { poNumber = it }
                 }
+
+                // Itemized Charges
+                if (additionalCharges.isNotEmpty()) {
+                    additionalCharges.forEachIndexed { idx, charge ->
+                        DetailSection {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Charge ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("X Remove", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { additionalCharges.removeAt(idx) }.padding(4.dp))
+                            }
+                            Text("Type", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                chargeTypeOptions.chunked(3).forEach { row ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        row.forEach { ct ->
+                                            val sel = charge.chargeType == ct
+                                            val displayLabel = ct.replace("_", " ").replaceFirstChar { it.uppercase() }
+                                            Text(displayLabel, fontSize = 10.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (sel) Color.White else Color(0xFF007AFF),
+                                                modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                                    .clickable { additionalCharges[idx] = charge.copy(chargeType = ct) }.padding(horizontal = 6.dp, vertical = 3.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            EditField("Rate", charge.rate) { additionalCharges[idx] = charge.copy(rate = it) }
+                            if (charge.chargeType == "hourly_charge") {
+                                EditField("Hours", charge.hours) { additionalCharges[idx] = charge.copy(hours = it) }
+                            }
+                        }
+                    }
+                }
+                Text("+ Add Charge", fontSize = 14.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { additionalCharges.add(ExtraCharge()) }.padding(horizontal = 4.dp, vertical = 6.dp))
 
                 // Submit
                 Button(
@@ -2674,6 +3199,7 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                             if (vehicleModel.isNotEmpty()) body.put("vehicle_model", vehicleModel)
                             if (vehicleColor.isNotEmpty()) body.put("vehicle_color", vehicleColor)
                             if (vehicleLicense.isNotEmpty()) body.put("vehicle_license", vehicleLicense)
+                            if (plateState.isNotEmpty()) body.put("plate_state", plateState)
                             if (vehicleVin.isNotEmpty()) body.put("vehicle_vin", vehicleVin)
                             if (pickupAddress.isNotEmpty()) body.put("pickup_address", pickupAddress)
                             if (pickupCity.isNotEmpty()) body.put("pickup_city", pickupCity)
@@ -2689,6 +3215,62 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                             if (reasonForTow.isNotEmpty()) body.put("reason_for_tow", reasonForTow)
                             if (baseRate.isNotEmpty()) body.put("base_rate", baseRate.toDoubleOrNull() ?: 0.0)
                             if (mileageRate.isNotEmpty()) body.put("mileage_rate", mileageRate.toDoubleOrNull() ?: 0.0)
+                            if (mileageField.isNotEmpty()) body.put("mileage", mileageField.toDoubleOrNull() ?: 0.0)
+                            if (taxRate.isNotEmpty()) body.put("tax_rate", taxRate.toDoubleOrNull() ?: 0.0)
+                            if (poNumber.isNotEmpty()) body.put("po_number", poNumber)
+                            if (selectedCustomerId != null) body.put("customer_id", selectedCustomerId!!)
+
+                            // Additional vehicles array
+                            val vehiclesArr = org.json.JSONArray()
+                            additionalVehicles.forEach { v ->
+                                val vObj = org.json.JSONObject()
+                                if (v.year.isNotEmpty()) vObj.put("vehicle_year", v.year)
+                                if (v.make.isNotEmpty()) vObj.put("vehicle_make", v.make)
+                                if (v.model.isNotEmpty()) vObj.put("vehicle_model", v.model)
+                                if (v.color.isNotEmpty()) vObj.put("vehicle_color", v.color)
+                                if (v.license.isNotEmpty()) vObj.put("vehicle_license", v.license)
+                                if (v.plateState.isNotEmpty()) vObj.put("plate_state", v.plateState)
+                                if (v.vin.isNotEmpty()) vObj.put("vehicle_vin", v.vin)
+                                vehiclesArr.put(vObj)
+                            }
+                            if (vehiclesArr.length() > 0) body.put("vehicles", vehiclesArr)
+
+                            // Additional addresses array
+                            val addressesArr = org.json.JSONArray()
+                            additionalAddresses.forEach { a ->
+                                val aObj = org.json.JSONObject()
+                                if (a.label.isNotEmpty()) aObj.put("label", a.label)
+                                if (a.address.isNotEmpty()) aObj.put("address", a.address)
+                                if (a.city.isNotEmpty()) aObj.put("city", a.city)
+                                if (a.state.isNotEmpty()) aObj.put("state", a.state)
+                                if (a.zip.isNotEmpty()) aObj.put("zip", a.zip)
+                                addressesArr.put(aObj)
+                            }
+                            if (addressesArr.length() > 0) body.put("addresses", addressesArr)
+
+                            // Charges array
+                            val chargesArr = org.json.JSONArray()
+                            additionalCharges.forEach { c ->
+                                val cObj = org.json.JSONObject()
+                                cObj.put("charge_type", c.chargeType)
+                                if (c.rate.isNotEmpty()) cObj.put("rate", c.rate.toDoubleOrNull() ?: 0.0)
+                                if (c.chargeType == "hourly_charge" && c.hours.isNotEmpty()) cObj.put("hours", c.hours.toDoubleOrNull() ?: 0.0)
+                                chargesArr.put(cObj)
+                            }
+                            if (chargesArr.length() > 0) body.put("charges", chargesArr)
+
+                            // Additional drivers array
+                            val driversArr = org.json.JSONArray()
+                            additionalDrivers.forEach { d ->
+                                if (d.driverId.isNotEmpty()) {
+                                    val dObj = org.json.JSONObject()
+                                    dObj.put("driver_id", d.driverId.toInt())
+                                    if (d.truckId.isNotEmpty()) dObj.put("truck_id", d.truckId.toInt())
+                                    driversArr.put(dObj)
+                                }
+                            }
+                            if (driversArr.length() > 0) body.put("drivers", driversArr)
+
                             val (code, respText) = apiPost("calls.php?action=create", body)
                             handler.post {
                                 isSaving = false
