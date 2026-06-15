@@ -84,7 +84,7 @@ class FCMService : FirebaseMessagingService() {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .setPriority(if (isChat) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setSound(soundUri)
             .setVibrate(if (isChat) longArrayOf(0, 200) else longArrayOf(0, 500, 200, 500))
             .build()
@@ -107,7 +107,7 @@ class FCMService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(callChannel)
 
             val chatChannel = NotificationChannel(
-                CHAT_CHANNEL_ID, "Chat Messages", NotificationManager.IMPORTANCE_DEFAULT
+                CHAT_CHANNEL_ID, "Chat Messages", NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Chat message notifications"
                 setSound(

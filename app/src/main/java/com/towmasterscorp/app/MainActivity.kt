@@ -171,6 +171,20 @@ fun AppContent(authPreferences: AuthPreferences) {
             user = currentUser!!,
             authPreferences = authPreferences,
             onLogout = {
+                val token = ApiClient.token
+                Thread {
+                    try {
+                        val url = java.net.URL("https://app.towmasterscorp.com/api/users.php?action=clock-out")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "POST"
+                        conn.setRequestProperty("Authorization", "Bearer ${token ?: ""}")
+                        conn.setRequestProperty("Content-Type", "application/json")
+                        conn.doOutput = true
+                        conn.outputStream.write("{}".toByteArray())
+                        conn.responseCode
+                        conn.disconnect()
+                    } catch (_: Exception) {}
+                }.start()
                 ApiClient.token = null
                 currentUser = null
                 isAuthenticated = false

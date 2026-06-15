@@ -54,7 +54,7 @@ fun getStatusDisplayName(status: String): String = when (status) {
     "hooked" -> "Hooked"
     "in_transit" -> "In Transit"
     "delivered" -> "Delivered"
-    "destination_arrival" -> "Dest. Arrival"
+    "destination_arrival" -> "Destination Arrival"
     "completed" -> "Completed"
     "canceled" -> "Canceled"
     else -> status.replace("_", " ").replaceFirstChar { it.uppercase() }
@@ -860,7 +860,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = if (!call?.callNumber.isNullOrEmpty()) call!!.callNumber!! else "Call #$callId",
+                text = if (!call?.callNumber.isNullOrEmpty()) call!!.callNumber!! else "Loading...",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
@@ -953,12 +953,12 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         "en_route" -> nextStatuses.add("on_scene" to "On Scene")
                         "on_scene" -> nextStatuses.add("hooked" to "Hooked")
                         "hooked" -> nextStatuses.add("in_transit" to "In Transit")
-                        "in_transit" -> nextStatuses.add("delivered" to "Delivered")
-                        "delivered" -> nextStatuses.add("completed" to "Complete")
+                        "in_transit" -> nextStatuses.add("destination_arrival" to "Destination Arrival")
+                        "destination_arrival" -> nextStatuses.add("completed" to "Completed")
                     }
                     if (nextStatuses.isNotEmpty()) {
                         DetailSection {
-                            Text("Update Status", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            SectionTitle(Icons.Default.Update, "Update Status", Color(0xFF007AFF))
                             Spacer(modifier = Modifier.height(8.dp))
                             nextStatuses.forEach { (status, label) ->
                                 val btnColor = getStatusColor(status)
@@ -1002,7 +1002,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
 
                 // Vehicle Section
                 DetailSection {
-                    Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    SectionTitle(Icons.Default.DirectionsCar, "Vehicle")
                     Spacer(modifier = Modifier.height(6.dp))
                     if (c.vehicleDescription.isNotEmpty()) {
                         DetailRow("Vehicle", c.vehicleDescription)
@@ -1018,7 +1018,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
 
                 // Change #6: Photos Section
                 DetailSection {
-                    Text("Photos", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    SectionTitle(Icons.Default.PhotoCamera, "Photos")
                     Spacer(modifier = Modifier.height(6.dp))
                     if (photosCount > 0) {
                         Text("$photosCount photo${if (photosCount != 1) "s" else ""} attached", fontSize = 14.sp, color = Color(0xFF007AFF))
@@ -1031,7 +1031,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 val hasPeople = !c.callerName.isNullOrEmpty() || !c.customerName.isNullOrEmpty() || !c.contactName.isNullOrEmpty()
                 if (hasPeople) {
                     DetailSection {
-                        Text("People", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        SectionTitle(Icons.Default.People, "People")
                         Spacer(modifier = Modifier.height(6.dp))
                         if (!c.callerName.isNullOrEmpty() && c.callerName != "null") {
                             DetailRow("Caller", c.callerName!!)
@@ -1047,7 +1047,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
 
                 // Locations Section with additional addresses
                 DetailSection {
-                    Text("Locations", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    SectionTitle(Icons.Default.LocationOn, "Locations", Color(0xFF34C759))
                     Spacer(modifier = Modifier.height(6.dp))
                     Text("PICKUP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34C759))
                     Text(c.fullPickupAddress, fontSize = 14.sp)
@@ -1082,7 +1082,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 val hasAssignment = !c.driverName.isNullOrEmpty() || !c.truckNumber.isNullOrEmpty()
                 if (hasAssignment) {
                     DetailSection {
-                        Text("Assignment", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        SectionTitle(Icons.Default.Person, "Assignment", Color(0xFFAF52DE))
                         Spacer(modifier = Modifier.height(6.dp))
                         if (!c.driverName.isNullOrEmpty()) DetailRow("Driver", c.driverName!!)
                         if (!c.truckNumber.isNullOrEmpty()) {
@@ -1104,7 +1104,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 val hasAmounts = c.totalAmount != null || c.baseRate != null || charges.isNotEmpty()
                 if (hasAmounts) {
                     DetailSection {
-                        Text("Billing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        SectionTitle(Icons.Default.AttachMoney, "Billing", Color(0xFF34C759))
                         Spacer(modifier = Modifier.height(6.dp))
                         if (c.baseRate != null) DetailRow("Base Rate", "$${formatAmount(c.baseRate)}")
                         if (c.mileageRate != null) DetailRow("Mileage Rate", "$${formatAmount(c.mileageRate)}/mi")
@@ -1171,7 +1171,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 val hasNotes = c.dispatchNotesSafe != null || c.driverNotesSafe != null
                 if (hasNotes) {
                     DetailSection {
-                        Text("Notes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        SectionTitle(Icons.Default.Notes, "Notes", Color(0xFFFF9500))
                         Spacer(modifier = Modifier.height(6.dp))
                         if (c.dispatchNotesSafe != null) {
                             Text("Dispatch Notes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
@@ -1197,7 +1197,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 )
                 if (timelineEntries.isNotEmpty()) {
                     DetailSection {
-                        Text("Timeline", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        SectionTitle(Icons.Default.Schedule, "Timeline")
                         Spacer(modifier = Modifier.height(6.dp))
                         timelineEntries.forEach { (label, dateStr) ->
                             val dotColor = when (label) {
@@ -1499,12 +1499,20 @@ fun DetailSection(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
             content = content
         )
+    }
+}
+
+@Composable
+fun SectionTitle(icon: ImageVector, title: String, color: Color = Color(0xFF007AFF)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
 }
 
@@ -2109,7 +2117,11 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
     var placeName by remember { mutableStateOf("") }
     var mileage by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
-    var receiptDate by remember { mutableStateOf("") }
+    var receiptDate by remember {
+        val cal = java.util.Calendar.getInstance()
+        val months = arrayOf("January","February","March","April","May","June","July","August","September","October","November","December")
+        mutableStateOf("${months[cal.get(java.util.Calendar.MONTH)]} ${cal.get(java.util.Calendar.DAY_OF_MONTH)}, ${cal.get(java.util.Calendar.YEAR)}")
+    }
     var fuelType by remember { mutableStateOf("regular") }
     var stationAddress by remember { mutableStateOf("") }
     var stationCity by remember { mutableStateOf("") }
@@ -2204,7 +2216,7 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                     val (code, _) = apiPost("fuel.php?action=create", body)
                     handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
                 }.start()
-            }, modifier = Modifier.fillMaxWidth(), enabled = gallons.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
+            }, modifier = Modifier.fillMaxWidth(), enabled = gallons.isNotEmpty() && selectedTruckId.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
                 Text(if (isSaving) "Saving..." else "Save Fuel Receipt", color = Color.White, fontWeight = FontWeight.Bold)
             }
