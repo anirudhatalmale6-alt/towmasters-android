@@ -24,8 +24,56 @@ fun DashboardScreen(user: User) {
     var completedToday by remember { mutableStateOf(0) }
     var todayRevenue by remember { mutableStateOf(0.0) }
     var driversOnline by remember { mutableStateOf(0) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun loadDashboard() {
+        isLoading = true
+        error = null
+        Thread {
+            try {
+                val url = java.net.URL("https://app.towmasterscorp.com/api/reports.php?action=dashboard")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                if (json.optBoolean("success")) {
+                    val today = json.optJSONObject("today")
+                    val tc = today?.optInt("total_calls", 0) ?: 0
+                    val ac = today?.optString("active", "0")?.toIntOrNull() ?: 0
+                    val ct = today?.optString("completed", "0")?.toIntOrNull() ?: 0
+                    val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
+                    val dr = json.optInt("drivers_active", 0)
+                    handler.post {
+                        todayCalls = tc
+                        activeCalls = ac
+                        completedToday = ct
+                        todayRevenue = tr
+                        driversOnline = dr
+                        isLoading = false
+                    }
+                } else {
+                    handler.post { isLoading = false }
+                }
+            } catch (e: Exception) {
+                Log.e("Dashboard", "Load failed", e)
+                handler.post {
+                    error = e.message
+                    isLoading = false
+                }
+            }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) {
+        loadDashboard()
+    }
 
     Column(
         modifier = Modifier
@@ -86,54 +134,12 @@ fun DashboardScreen(user: User) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
         Button(
-            onClick = {
-                isLoading = true
-                error = null
-                Thread {
-                    try {
-                        val url = java.net.URL("https://app.towmasterscorp.com/api/reports.php?action=dashboard")
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
-                        conn.setRequestProperty("Accept", "application/json")
-                        conn.connectTimeout = 10000
-                        conn.readTimeout = 10000
-
-                        val responseText = conn.inputStream.bufferedReader().readText()
-                        conn.disconnect()
-
-                        val json = org.json.JSONObject(responseText)
-                        if (json.optBoolean("success")) {
-                            val today = json.optJSONObject("today")
-                            val tc = today?.optInt("total_calls", 0) ?: 0
-                            val ac = today?.optString("active", "0")?.toIntOrNull() ?: 0
-                            val ct = today?.optString("completed", "0")?.toIntOrNull() ?: 0
-                            val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
-                            val dr = json.optInt("drivers_active", 0)
-                            handler.post {
-                                todayCalls = tc
-                                activeCalls = ac
-                                completedToday = ct
-                                todayRevenue = tr
-                                driversOnline = dr
-                                isLoading = false
-                            }
-                        } else {
-                            handler.post { isLoading = false }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("Dashboard", "Load failed", e)
-                        handler.post {
-                        error = e.message
-                        isLoading = false
-                    }
-                    }
-                }.start()
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = { loadDashboard() },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
         ) {
-            Text(if (isLoading) "Loading..." else "Load Dashboard Stats")
+            Text(if (isLoading) "Loading..." else "Refresh")
         }
 
         Spacer(modifier = Modifier.height(40.dp))

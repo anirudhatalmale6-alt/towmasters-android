@@ -8,6 +8,7 @@ import android.os.Build
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import com.towmasterscorp.app.services.FCMService
 import com.towmasterscorp.app.services.LocationService
+import kotlinx.coroutines.runBlocking
 
 class TowMastersApp : Application() {
 
@@ -18,23 +19,24 @@ class TowMastersApp : Application() {
         super.onCreate()
         instance = this
 
-        // Global crash handler - clear auth to prevent crash loops
+        authPreferences = AuthPreferences(this)
+
+        val crashPrefs = getSharedPreferences("crash_flag", Context.MODE_PRIVATE)
+        if (crashPrefs.getBoolean("clear_auth", false)) {
+            runBlocking { authPreferences.clearAll() }
+            crashPrefs.edit().putBoolean("clear_auth", false).commit()
+        }
+
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             android.util.Log.e("TowMasters", "UNCAUGHT CRASH: ${throwable.javaClass.simpleName}: ${throwable.message}", throwable)
             try {
-                // Clear saved auth to prevent crash-loop on reopen
-                kotlinx.coroutines.runBlocking {
-                    authPreferences.clearAll()
-                }
+                getSharedPreferences("crash_flag", Context.MODE_PRIVATE)
+                    .edit().putBoolean("clear_auth", true).commit()
             } catch (_: Throwable) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
-        // Initialize preferences
-        authPreferences = AuthPreferences(this)
-
-        // Create notification channels
         createNotificationChannels()
     }
 
