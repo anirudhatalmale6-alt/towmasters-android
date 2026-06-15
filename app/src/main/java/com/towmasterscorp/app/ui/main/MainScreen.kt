@@ -1838,6 +1838,7 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
     var inspections by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreate by remember { mutableStateOf(false) }
+    var selectedInspection by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var trucks by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
@@ -1870,6 +1871,8 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
 
     if (showCreate) {
         CreateInspectionScreen(trucks = trucks, onBack = { showCreate = false }, onCreated = { showCreate = false; loadData() })
+    } else if (selectedInspection != null) {
+        InspectionDetailScreen(inspection = selectedInspection!!, onBack = { selectedInspection = null })
     } else {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
             ScreenHeader("Inspections", onBack) {
@@ -1882,7 +1885,7 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
             } else {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     inspections.forEach { insp ->
-                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Card(modifier = Modifier.fillMaxWidth().clickable { selectedInspection = insp }, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(insp.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -1901,6 +1904,75 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun InspectionDetailScreen(inspection: org.json.JSONObject, onBack: () -> Unit) {
+    val checkItems = listOf("tires","brakes","lights","mirrors","horn","wipers","fluids","boom_winch","wheel_lift","chains_straps","safety_equipment","body_damage")
+    val status = inspection.optString("status", "pending")
+    val sColor = when { status.contains("pass") -> Color(0xFF34C759); status.contains("fail") -> Color(0xFFFF3B30); else -> Color(0xFFFF9500) }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("Inspection Details", onBack)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            DetailSection {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text(inspection.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                        val tYear = inspection.optString("truck_year", "")
+                        val tMake = inspection.optString("truck_make", "")
+                        val tModel = inspection.optString("truck_model", "")
+                        val truckInfo = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() && it != "null" && it != "0" }.joinToString(" ")
+                        if (truckInfo.isNotEmpty()) Text(truckInfo, fontSize = 14.sp, color = Color(0xFF8E8E93))
+                    }
+                    Text(status.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = sColor,
+                        modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                val driverName = inspection.optString("driver_name", "")
+                if (driverName.isNotEmpty()) DetailRow("Inspector", driverName)
+                DetailRow("Type", inspection.optString("inspection_type", "").replace("_", " ").replaceFirstChar { it.uppercase() })
+                val odo = inspection.optString("odometer", "")
+                if (odo.isNotEmpty() && odo != "null" && odo != "0") DetailRow("Odometer", "$odo mi")
+                val fuel = inspection.optString("fuel_level", "")
+                if (fuel.isNotEmpty() && fuel != "null") DetailRow("Fuel Level", fuel.replaceFirstChar { it.uppercase() })
+                DetailRow("Date", inspection.optString("inspected_at", inspection.optString("created_at", "")))
+            }
+
+            DetailSection {
+                SectionTitle(Icons.Default.Checklist, "Checklist")
+                Spacer(modifier = Modifier.height(6.dp))
+                checkItems.forEach { item ->
+                    val label = item.replace("_", " ").replaceFirstChar { it.uppercase() }
+                    val value = inspection.optInt(item, -1)
+                    val passed = value == 1
+                    val failed = value == 0
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, fontSize = 14.sp)
+                        if (failed) {
+                            Text("FAIL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF3B30),
+                                modifier = Modifier.background(Color(0xFFFF3B30).copy(alpha = 0.1f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                        } else if (passed) {
+                            Text("PASS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34C759),
+                                modifier = Modifier.background(Color(0xFF34C759).copy(alpha = 0.1f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                        } else {
+                            Text("N/A", fontSize = 12.sp, color = Color(0xFF8E8E93))
+                        }
+                    }
+                }
+            }
+
+            val notes = inspection.optString("notes", "")
+            if (notes.isNotEmpty() && notes != "null") {
+                DetailSection {
+                    SectionTitle(Icons.Default.Notes, "Notes", Color(0xFFFF9500))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(notes, fontSize = 14.sp)
+                }
+            }
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
@@ -2025,6 +2097,7 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
     var receipts by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var showCreate by remember { mutableStateOf(false) }
+    var selectedReceipt by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var trucks by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
@@ -2057,6 +2130,8 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
 
     if (showCreate) {
         CreateFuelReceiptScreen(trucks = trucks, onBack = { showCreate = false }, onCreated = { showCreate = false; loadData() })
+    } else if (selectedReceipt != null) {
+        FuelReceiptDetailScreen(receipt = selectedReceipt!!, onBack = { selectedReceipt = null })
     } else {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
             ScreenHeader("Fuel Receipts", onBack) {
@@ -2069,7 +2144,7 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
             } else {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     receipts.forEach { receipt ->
-                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Card(modifier = Modifier.fillMaxWidth().clickable { selectedReceipt = receipt }, shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     // Change #12: Show truck year/make/model
@@ -2107,7 +2182,84 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
     }
 }
 
-// Change #11: Added date, fuel type, station address fields
+@Composable
+fun FuelReceiptDetailScreen(receipt: org.json.JSONObject, onBack: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("Fuel Receipt Details", onBack)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            DetailSection {
+                val truckNum = receipt.optString("truck_number", "")
+                val tYear = receipt.optString("truck_year", "").let { if (it == "0" || it == "null" || it.isEmpty()) "" else it }
+                val tMake = receipt.optString("truck_make", "").let { if (it == "null") "" else it }
+                val tModel = receipt.optString("truck_model", "").let { if (it == "null") "" else it }
+                if (truckNum.isNotEmpty()) Text(truckNum, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                val ymm = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() }.joinToString(" ")
+                if (ymm.isNotEmpty()) Text(ymm, fontSize = 14.sp, color = Color(0xFF8E8E93))
+
+                Spacer(modifier = Modifier.height(8.dp))
+                val totalCost = receipt.optDouble("total_cost", 0.0)
+                if (totalCost > 0) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Total Cost", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                        Text("$${String.format("%.2f", totalCost)}", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF34C759))
+                    }
+                }
+            }
+
+            DetailSection {
+                SectionTitle(Icons.Default.LocalGasStation, "Fuel Details")
+                Spacer(modifier = Modifier.height(6.dp))
+                val gallons = receipt.optDouble("gallons", 0.0)
+                if (gallons > 0) DetailRow("Gallons", "${String.format("%.2f", gallons)} gal")
+                val ppg = receipt.optDouble("price_per_gallon", 0.0)
+                if (ppg > 0) DetailRow("Price/Gallon", "$${String.format("%.3f", ppg)}")
+                val fuelType = receipt.optString("fuel_type", "")
+                if (fuelType.isNotEmpty() && fuelType != "null") DetailRow("Fuel Type", fuelType.replace("_", " ").replaceFirstChar { it.uppercase() })
+                val mileage = receipt.optString("truck_mileage", "")
+                if (mileage.isNotEmpty() && mileage != "null" && mileage != "0") DetailRow("Mileage", "$mileage mi")
+                val date = receipt.optString("receipt_date", receipt.optString("created_at", ""))
+                if (date.isNotEmpty()) DetailRow("Date", date)
+            }
+
+            val place = receipt.optString("place_name", "")
+            val addr = receipt.optString("address", "")
+            val city = receipt.optString("city", "")
+            val state = receipt.optString("state", "")
+            val zip = receipt.optString("zip", "")
+            val hasLocation = listOf(place, addr, city).any { it.isNotEmpty() && it != "null" }
+            if (hasLocation) {
+                DetailSection {
+                    SectionTitle(Icons.Default.LocationOn, "Station", Color(0xFF34C759))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (place.isNotEmpty() && place != "null") DetailRow("Station", place)
+                    if (addr.isNotEmpty() && addr != "null") DetailRow("Address", addr)
+                    val csz = listOf(city, state).filter { it.isNotEmpty() && it != "null" }.joinToString(", ") + if (zip.isNotEmpty() && zip != "null") " $zip" else ""
+                    if (csz.isNotBlank()) DetailRow("City/State", csz.trim())
+                }
+            }
+
+            val driverName = receipt.optString("driver_name", "")
+            if (driverName.isNotEmpty() && driverName != "null") {
+                DetailSection {
+                    SectionTitle(Icons.Default.Person, "Driver", Color(0xFFAF52DE))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    DetailRow("Driver", driverName)
+                }
+            }
+
+            val notes = receipt.optString("notes", "")
+            if (notes.isNotEmpty() && notes != "null") {
+                DetailSection {
+                    SectionTitle(Icons.Default.Notes, "Notes", Color(0xFFFF9500))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(notes, fontSize = 14.sp)
+                }
+            }
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
 @Composable
 fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit, onCreated: () -> Unit) {
     var selectedTruckId by remember { mutableStateOf("") }
