@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.CoroutineScope
 import androidx.core.content.ContextCompat
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.User
@@ -26,6 +27,7 @@ import com.towmasterscorp.app.ui.auth.LoginViewModel
 import com.towmasterscorp.app.ui.main.MainScreen
 import com.towmasterscorp.app.ui.theme.TowMastersTheme
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
@@ -149,6 +151,8 @@ fun AppContent(authPreferences: AuthPreferences) {
         }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+
     if (isAuthenticated && currentUser != null) {
         MainScreen(
             user = currentUser!!,
@@ -157,6 +161,9 @@ fun AppContent(authPreferences: AuthPreferences) {
                 ApiClient.token = null
                 currentUser = null
                 isAuthenticated = false
+                coroutineScope.launch {
+                    authPreferences.clearAll()
+                }
             }
         )
     } else {

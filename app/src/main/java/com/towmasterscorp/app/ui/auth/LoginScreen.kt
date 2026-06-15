@@ -170,16 +170,19 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Login Button
+            val canLogin = uiState.email.isNotBlank() && uiState.password.isNotBlank() && !uiState.isLoading
             Button(
                 onClick = { viewModel.login() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                enabled = !uiState.isLoading,
+                enabled = canLogin,
                 shape = RoundedCornerShape(25.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFE0E0E0),
-                    contentColor = Color.Gray
+                    containerColor = if (canLogin) Color(0xFF007AFF) else Color(0xFFE0E0E0),
+                    contentColor = if (canLogin) Color.White else Color.Gray,
+                    disabledContainerColor = Color(0xFFE0E0E0),
+                    disabledContentColor = Color.Gray
                 )
             ) {
                 Text(

@@ -1,9 +1,11 @@
 package com.towmasterscorp.app.ui.main
 
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -375,7 +377,8 @@ fun CallCard(call: Call, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.08f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = null
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -893,7 +896,13 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text("Itemized Charges", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
                             charges.forEach { ch ->
-                                DetailRow(ch.description, "$${String.format("%.2f", ch.amount)}")
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(ch.description, fontSize = 13.sp, color = Color(0xFF333333), modifier = Modifier.weight(1f))
+                                    Text("$${String.format("%.2f", ch.amount)}", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                         if (taxRate > 0 || taxAmount > 0) {
@@ -1254,9 +1263,9 @@ fun SimpleMoreScreen(user: User, onLogout: () -> Unit) {
     var selectedScreen by remember { mutableStateOf<String?>(null) }
 
     when (selectedScreen) {
-        "chat" -> PlaceholderScreen("Chat", "Coming soon") { selectedScreen = null }
-        "inspections" -> InspectionsScreen { selectedScreen = null }
-        "fuel" -> FuelReceiptsScreen { selectedScreen = null }
+        "chat" -> ChatScreen(user = user) { selectedScreen = null }
+        "inspections" -> InspectionsScreen(user = user) { selectedScreen = null }
+        "fuel" -> FuelReceiptsScreen(user = user) { selectedScreen = null }
         else -> {
             Column(
                 modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))
@@ -1266,7 +1275,6 @@ fun SimpleMoreScreen(user: User, onLogout: () -> Unit) {
             ) {
                 Text(text = "More", fontSize = 28.sp, fontWeight = FontWeight.Bold)
 
-                // User Profile Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -1284,30 +1292,16 @@ fun SimpleMoreScreen(user: User, onLogout: () -> Unit) {
                                 .background(Color(0xFF007AFF)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
+                            Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                         }
                         Column {
                             Text(text = user.fullName, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = user.role.replaceFirstChar { it.uppercase() },
-                                fontSize = 13.sp,
-                                color = Color(0xFF8E8E93)
-                            )
-                            Text(
-                                text = "Tow Masters Towing",
-                                fontSize = 13.sp,
-                                color = Color(0xFF8E8E93)
-                            )
+                            Text(text = user.role.replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                            Text(text = "Tow Masters Towing", fontSize = 13.sp, color = Color(0xFF8E8E93))
                         }
                     }
                 }
 
-                // Operations Section
                 Text("Operations", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
 
                 Card(
@@ -1316,49 +1310,27 @@ fun SimpleMoreScreen(user: User, onLogout: () -> Unit) {
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column {
-                        MoreMenuItem(
-                            icon = Icons.Default.ChatBubble,
-                            label = "Chat",
-                            onClick = { selectedScreen = "chat" }
-                        )
+                        MoreMenuItem(icon = Icons.Default.ChatBubble, label = "Chat") { selectedScreen = "chat" }
                         Box(modifier = Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(Color(0xFFD1D1D6)))
-                        MoreMenuItem(
-                            icon = Icons.Default.Checklist,
-                            label = "Inspections",
-                            onClick = { selectedScreen = "inspections" }
-                        )
+                        MoreMenuItem(icon = Icons.Default.Checklist, label = "Inspections") { selectedScreen = "inspections" }
                         Box(modifier = Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(Color(0xFFD1D1D6)))
-                        MoreMenuItem(
-                            icon = Icons.Default.LocalGasStation,
-                            label = "Fuel Receipts",
-                            onClick = { selectedScreen = "fuel" }
-                        )
+                        MoreMenuItem(icon = Icons.Default.LocalGasStation, label = "Fuel Receipts") { selectedScreen = "fuel" }
                     }
                 }
 
-                // Logout
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                ApiClient.token = null
-                                onLogout()
-                            }
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { onLogout() }
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            Icons.Default.ExitToApp,
-                            contentDescription = null,
-                            tint = Color(0xFFFF3B30),
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color(0xFFFF3B30), modifier = Modifier.size(22.dp))
                         Text("Log Out", color = Color(0xFFFF3B30), fontSize = 16.sp)
                     }
                 }
@@ -1396,191 +1368,492 @@ fun MoreMenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun PlaceholderScreen(title: String, message: String, onBack: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
-            Spacer(modifier = Modifier.weight(1f))
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(60.dp))
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(message, color = Color.Gray, fontSize = 16.sp)
+fun ScreenHeader(title: String, onBack: () -> Unit, trailingContent: @Composable RowScope.() -> Unit = {}) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+        Spacer(modifier = Modifier.weight(1f))
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(modifier = Modifier.weight(1f))
+        trailingContent()
+    }
+    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
+}
+
+fun apiGet(endpoint: String): String? {
+    return try {
+        val url = java.net.URL("https://app.towmasterscorp.com/api/$endpoint")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+        conn.setRequestProperty("Accept", "application/json")
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        val text = conn.inputStream.bufferedReader().readText()
+        conn.disconnect()
+        text
+    } catch (_: Exception) { null }
+}
+
+fun apiPost(endpoint: String, body: org.json.JSONObject): Pair<Int, String> {
+    return try {
+        val url = java.net.URL("https://app.towmasterscorp.com/api/$endpoint")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+        conn.outputStream.write(body.toString().toByteArray())
+        val code = conn.responseCode
+        val text = try { if (code in 200..299) conn.inputStream.bufferedReader().readText() else conn.errorStream?.bufferedReader()?.readText() ?: "" } catch (_: Exception) { "" }
+        conn.disconnect()
+        code to text
+    } catch (e: Exception) { 0 to (e.message ?: "Network error") }
+}
+
+@Composable
+fun ChatScreen(user: User, onBack: () -> Unit) {
+    var conversations by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedUserId by remember { mutableStateOf<Int?>(null) }
+    var selectedUserName by remember { mutableStateOf("") }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun loadConversations() {
+        Thread {
+            val text = apiGet("chat.php?action=conversations")
+            if (text != null) {
+                val json = org.json.JSONObject(text)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("conversations") ?: org.json.JSONArray()
+                    val list = mutableListOf<org.json.JSONObject>()
+                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                    handler.post { conversations = list; isLoading = false }
+                } else handler.post { isLoading = false }
+            } else handler.post { isLoading = false }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) { loadConversations() }
+
+    if (selectedUserId != null) {
+        ChatDetailScreen(userId = selectedUserId!!, userName = selectedUserName, currentUserId = user.id) { selectedUserId = null }
+    } else {
+        Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+            ScreenHeader("Chat", onBack)
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Loading...", color = Color.Gray) }
+            } else if (conversations.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No conversations yet", color = Color.Gray, fontSize = 16.sp) }
+            } else {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    conversations.forEach { conv ->
+                        val name = "${conv.optString("first_name", "")} ${conv.optString("last_name", "")}".trim()
+                        val uid = conv.optInt("user_id")
+                        val unread = conv.optInt("unread_count", 0)
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable { selectedUserId = uid; selectedUserName = name },
+                            shape = RoundedCornerShape(0.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF007AFF)), contentAlignment = Alignment.Center) {
+                                    Text(name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                    Text(conv.optString("last_message", "").take(50), fontSize = 13.sp, color = Color(0xFF8E8E93), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (unread > 0) {
+                                    Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(Color(0xFF007AFF)), contentAlignment = Alignment.Center) {
+                                        Text("$unread", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun InspectionsScreen(onBack: () -> Unit) {
+fun ChatDetailScreen(userId: Int, userName: String, currentUserId: Int, onBack: () -> Unit) {
+    var messages by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var newMessage by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun loadMessages() {
+        Thread {
+            val text = apiGet("chat.php?action=messages&user_id=$userId")
+            if (text != null) {
+                val json = org.json.JSONObject(text)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("messages") ?: org.json.JSONArray()
+                    val list = mutableListOf<org.json.JSONObject>()
+                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                    handler.post { messages = list; isLoading = false }
+                } else handler.post { isLoading = false }
+            } else handler.post { isLoading = false }
+        }.start()
+    }
+
+    fun sendMsg() {
+        if (newMessage.isBlank() || isSending) return
+        isSending = true
+        val msg = newMessage
+        newMessage = ""
+        Thread {
+            val body = org.json.JSONObject()
+            body.put("recipient_id", userId)
+            body.put("message", msg)
+            val (code, _) = apiPost("chat.php?action=send", body)
+            handler.post {
+                isSending = false
+                if (code in 200..299) loadMessages()
+                else newMessage = msg
+            }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) { loadMessages() }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(10000); loadMessages() } }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader(userName, onBack)
+        if (isLoading) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Text("Loading...", color = Color.Gray) }
+        } else {
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                messages.forEach { msg ->
+                    val isMe = msg.optInt("sender_id") == currentUserId
+                    val align = if (isMe) Arrangement.End else Arrangement.Start
+                    val bgColor = if (isMe) Color(0xFF007AFF) else Color.White
+                    val textColor = if (isMe) Color.White else Color.Black
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = align) {
+                        Box(modifier = Modifier.background(bgColor, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 8.dp).widthIn(max = 280.dp)) {
+                            Text(msg.optString("message", ""), color = textColor, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = newMessage, onValueChange = { newMessage = it },
+                placeholder = { Text("Message", fontSize = 14.sp) },
+                modifier = Modifier.weight(1f),
+                singleLine = true, shape = RoundedCornerShape(20.dp),
+                colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color(0xFFD1D1D6))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier.size(36.dp).clip(CircleShape)
+                    .background(if (newMessage.isNotBlank()) Color(0xFF007AFF) else Color(0xFFD1D1D6))
+                    .clickable(enabled = newMessage.isNotBlank()) { sendMsg() },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+        }
+    }
+}
+
+@Composable
+fun InspectionsScreen(user: User, onBack: () -> Unit) {
     var inspections by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var showCreate by remember { mutableStateOf(false) }
+    var trucks by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
-    LaunchedEffect(Unit) {
+    fun loadData() {
+        isLoading = true
         Thread {
-            try {
-                val url = java.net.URL("https://app.towmasterscorp.com/api/inspections.php?action=list")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
-                conn.setRequestProperty("Accept", "application/json")
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                val responseText = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-                val json = org.json.JSONObject(responseText)
+            val text = apiGet("inspections.php?action=list")
+            val truckText = apiGet("trucks.php?action=list")
+            val inspList = mutableListOf<org.json.JSONObject>()
+            val truckList = mutableListOf<org.json.JSONObject>()
+            if (text != null) {
+                val json = org.json.JSONObject(text)
                 if (json.optBoolean("success")) {
                     val arr = json.optJSONArray("inspections") ?: org.json.JSONArray()
-                    val list = mutableListOf<org.json.JSONObject>()
-                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
-                    handler.post { inspections = list; isLoading = false }
-                } else {
-                    handler.post { isLoading = false }
+                    for (i in 0 until arr.length()) inspList.add(arr.getJSONObject(i))
                 }
-            } catch (e: Exception) {
-                handler.post { isLoading = false }
             }
+            if (truckText != null) {
+                val json = org.json.JSONObject(truckText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("trucks") ?: org.json.JSONArray()
+                    for (i in 0 until arr.length()) truckList.add(arr.getJSONObject(i))
+                }
+            }
+            handler.post { inspections = inspList; trucks = truckList; isLoading = false }
         }.start()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
-            Spacer(modifier = Modifier.weight(1f))
-            Text("Inspections", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(60.dp))
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
+    LaunchedEffect(Unit) { loadData() }
 
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading...", color = Color.Gray)
+    if (showCreate) {
+        CreateInspectionScreen(trucks = trucks, onBack = { showCreate = false }, onCreated = { showCreate = false; loadData() })
+    } else {
+        Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+            ScreenHeader("Inspections", onBack) {
+                Text("+ New", color = Color(0xFF007AFF), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { showCreate = true }.padding(8.dp))
             }
-        } else if (inspections.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No inspections found", color = Color.Gray, fontSize = 16.sp)
-            }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                inspections.forEach { insp ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(insp.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                val status = insp.optString("status", "pending")
-                                val sColor = if (status == "passed") Color(0xFF34C759) else if (status == "failed") Color(0xFFFF3B30) else Color(0xFFFF9500)
-                                Text(
-                                    status.replaceFirstChar { it.uppercase() },
-                                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = sColor,
-                                    modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Loading...", color = Color.Gray) }
+            } else if (inspections.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No inspections found", color = Color.Gray, fontSize = 16.sp) }
+            } else {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    inspections.forEach { insp ->
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(insp.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    val status = insp.optString("status", "pending")
+                                    val sColor = when { status.contains("pass") -> Color(0xFF34C759); status.contains("fail") -> Color(0xFFFF3B30); else -> Color(0xFFFF9500) }
+                                    Text(status.replaceFirstChar { it.uppercase() }, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = sColor,
+                                        modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
+                                }
+                                val driverName = insp.optString("driver_name", "")
+                                if (driverName.isNotEmpty()) Text(driverName, fontSize = 13.sp, color = Color(0xFF007AFF))
+                                Text(insp.optString("inspection_type", "").replace("_", " ").replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                                Text(insp.optString("created_at", ""), fontSize = 11.sp, color = Color(0xFFAEAEB2))
                             }
-                            Text(insp.optString("inspection_type", "").replace("_", " ").replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = Color(0xFF8E8E93))
-                            Text(insp.optString("created_at", ""), fontSize = 11.sp, color = Color(0xFFAEAEB2))
                         }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 }
 
 @Composable
-fun FuelReceiptsScreen(onBack: () -> Unit) {
-    var receipts by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
+fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit, onCreated: () -> Unit) {
+    var selectedTruckId by remember { mutableStateOf("") }
+    var inspectionType by remember { mutableStateOf("pre_trip") }
+    var odometer by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveMsg by remember { mutableStateOf<String?>(null) }
+    val checkItems = listOf("tires", "brakes", "lights", "mirrors", "horn", "wipers", "fluids", "boom_winch", "wheel_lift", "chains_straps", "safety_equipment", "body_damage")
+    val checkStates = remember { mutableStateMapOf<String, Int>().apply { checkItems.forEach { put(it, 1) } } }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
-    LaunchedEffect(Unit) {
-        Thread {
-            try {
-                val url = java.net.URL("https://app.towmasterscorp.com/api/fuel.php?action=list")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
-                conn.setRequestProperty("Accept", "application/json")
-                conn.connectTimeout = 10000
-                conn.readTimeout = 10000
-                val responseText = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-                val json = org.json.JSONObject(responseText)
-                if (json.optBoolean("success")) {
-                    val arr = json.optJSONArray("receipts") ?: json.optJSONArray("fuel_receipts") ?: org.json.JSONArray()
-                    val list = mutableListOf<org.json.JSONObject>()
-                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
-                    handler.post { receipts = list; isLoading = false }
-                } else {
-                    handler.post { isLoading = false }
-                }
-            } catch (e: Exception) {
-                handler.post { isLoading = false }
-            }
-        }.start()
-    }
-
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
-        Row(
-            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
-            Spacer(modifier = Modifier.weight(1f))
-            Text("Fuel Receipts", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(60.dp))
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Loading...", color = Color.Gray)
-            }
-        } else if (receipts.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No fuel receipts found", color = Color.Gray, fontSize = 16.sp)
-            }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                receipts.forEach { receipt ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(receipt.optString("truck_number", receipt.optString("station_name", "Fuel Receipt")), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                val amount = receipt.optDouble("total_cost", receipt.optDouble("amount", 0.0))
-                                Text("$${String.format("%.2f", amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF34C759))
-                            }
-                            val gallons = receipt.optDouble("gallons", 0.0)
-                            if (gallons > 0) Text("${String.format("%.2f", gallons)} gal", fontSize = 13.sp, color = Color(0xFF8E8E93))
-                            val station = receipt.optString("station_name", "")
-                            if (station.isNotEmpty()) Text(station, fontSize = 13.sp, color = Color(0xFF8E8E93))
-                            Text(receipt.optString("fuel_date", receipt.optString("created_at", "")), fontSize = 11.sp, color = Color(0xFFAEAEB2))
+        ScreenHeader("New Inspection", onBack)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DetailSection {
+                Text("Truck", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (trucks.isEmpty()) {
+                    Text("No trucks available", color = Color.Gray, fontSize = 13.sp)
+                } else {
+                    trucks.forEach { truck ->
+                        val tid = truck.optInt("id").toString()
+                        Row(modifier = Modifier.fillMaxWidth().clickable { selectedTruckId = tid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (selectedTruckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("${truck.optString("unit_number", "")} - ${truck.optString("make", "")} ${truck.optString("model", "")}", fontSize = 14.sp)
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
+            DetailSection {
+                Text("Type", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("pre_trip" to "Pre-Trip", "post_trip" to "Post-Trip").forEach { (value, label) ->
+                        val sel = inspectionType == value
+                        Text(label, fontSize = 13.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) Color.White else Color(0xFF007AFF),
+                            modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(8.dp)).clickable { inspectionType = value }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                EditField("Odometer", odometer) { odometer = it }
+            }
+            DetailSection {
+                Text("Checklist", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                checkItems.forEach { item ->
+                    val label = item.replace("_", " ").replaceFirstChar { it.uppercase() }
+                    val pass = (checkStates[item] ?: 1) == 1
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Pass", fontSize = 12.sp, color = if (pass) Color.White else Color(0xFF34C759), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.background(if (pass) Color(0xFF34C759) else Color(0xFF34C759).copy(alpha = 0.1f), RoundedCornerShape(6.dp)).clickable { checkStates[item] = 1 }.padding(horizontal = 10.dp, vertical = 4.dp))
+                            Text("Fail", fontSize = 12.sp, color = if (!pass) Color.White else Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.background(if (!pass) Color(0xFFFF3B30) else Color(0xFFFF3B30).copy(alpha = 0.1f), RoundedCornerShape(6.dp)).clickable { checkStates[item] = 0 }.padding(horizontal = 10.dp, vertical = 4.dp))
+                        }
+                    }
+                }
+            }
+            EditField("Notes", notes) { notes = it }
+            Button(onClick = {
+                if (selectedTruckId.isEmpty() || isSaving) return@Button
+                isSaving = true; saveMsg = null
+                Thread {
+                    val body = org.json.JSONObject()
+                    body.put("truck_id", selectedTruckId.toInt())
+                    body.put("inspection_type", inspectionType)
+                    if (odometer.isNotEmpty()) body.put("odometer", odometer.toIntOrNull() ?: 0)
+                    body.put("notes", notes)
+                    checkItems.forEach { body.put(it, checkStates[it] ?: 1) }
+                    val (code, _) = apiPost("inspections.php?action=create", body)
+                    handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
+                }.start()
+            }, modifier = Modifier.fillMaxWidth(), enabled = selectedTruckId.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
+                Text(if (isSaving) "Saving..." else "Submit Inspection", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            if (saveMsg != null) Text(saveMsg!!, color = Color.Red, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
+fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
+    var receipts by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var showCreate by remember { mutableStateOf(false) }
+    var trucks by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun loadData() {
+        isLoading = true
+        Thread {
+            val text = apiGet("fuel.php?action=list")
+            val truckText = apiGet("trucks.php?action=list")
+            val rList = mutableListOf<org.json.JSONObject>()
+            val tList = mutableListOf<org.json.JSONObject>()
+            if (text != null) {
+                val json = org.json.JSONObject(text)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("receipts") ?: json.optJSONArray("fuel_receipts") ?: org.json.JSONArray()
+                    for (i in 0 until arr.length()) rList.add(arr.getJSONObject(i))
+                }
+            }
+            if (truckText != null) {
+                val json = org.json.JSONObject(truckText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("trucks") ?: org.json.JSONArray()
+                    for (i in 0 until arr.length()) tList.add(arr.getJSONObject(i))
+                }
+            }
+            handler.post { receipts = rList; trucks = tList; isLoading = false }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) { loadData() }
+
+    if (showCreate) {
+        CreateFuelReceiptScreen(trucks = trucks, onBack = { showCreate = false }, onCreated = { showCreate = false; loadData() })
+    } else {
+        Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+            ScreenHeader("Fuel Receipts", onBack) {
+                Text("+ New", color = Color(0xFF007AFF), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { showCreate = true }.padding(8.dp))
+            }
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Loading...", color = Color.Gray) }
+            } else if (receipts.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No fuel receipts found", color = Color.Gray, fontSize = 16.sp) }
+            } else {
+                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    receipts.forEach { receipt ->
+                        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(receipt.optString("truck_number", receipt.optString("place_name", "Fuel Receipt")), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    val amount = receipt.optDouble("total_cost", 0.0)
+                                    if (amount > 0) Text("$${String.format("%.2f", amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF34C759))
+                                }
+                                val gallons = receipt.optDouble("gallons", 0.0)
+                                if (gallons > 0) Text("${String.format("%.2f", gallons)} gal", fontSize = 13.sp, color = Color(0xFF8E8E93))
+                                val place = receipt.optString("place_name", "")
+                                if (place.isNotEmpty()) Text(place, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                                val driverName = receipt.optString("driver_name", "")
+                                if (driverName.isNotEmpty()) Text(driverName, fontSize = 12.sp, color = Color(0xFF007AFF))
+                                Text(receipt.optString("receipt_date", receipt.optString("created_at", "")), fontSize = 11.sp, color = Color(0xFFAEAEB2))
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit, onCreated: () -> Unit) {
+    var selectedTruckId by remember { mutableStateOf("") }
+    var gallons by remember { mutableStateOf("") }
+    var pricePerGallon by remember { mutableStateOf("") }
+    var totalCost by remember { mutableStateOf("") }
+    var placeName by remember { mutableStateOf("") }
+    var mileage by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveMsg by remember { mutableStateOf<String?>(null) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("New Fuel Receipt", onBack)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DetailSection {
+                Text("Truck", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (trucks.isEmpty()) {
+                    Text("No trucks available", color = Color.Gray, fontSize = 13.sp)
+                } else {
+                    trucks.forEach { truck ->
+                        val tid = truck.optInt("id").toString()
+                        Row(modifier = Modifier.fillMaxWidth().clickable { selectedTruckId = tid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (selectedTruckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(truck.optString("unit_number", ""), fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+            DetailSection {
+                Text("Fuel Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                EditField("Gallons", gallons) { gallons = it }
+                EditField("Price per Gallon", pricePerGallon) { pricePerGallon = it }
+                EditField("Total Cost", totalCost) { totalCost = it }
+                EditField("Station Name", placeName) { placeName = it }
+                EditField("Truck Mileage", mileage) { mileage = it }
+                EditField("Notes", notes) { notes = it }
+            }
+            Button(onClick = {
+                if (gallons.isEmpty() || isSaving) return@Button
+                isSaving = true; saveMsg = null
+                Thread {
+                    val body = org.json.JSONObject()
+                    if (selectedTruckId.isNotEmpty()) body.put("truck_id", selectedTruckId.toInt())
+                    body.put("gallons", gallons.toDoubleOrNull() ?: 0.0)
+                    if (pricePerGallon.isNotEmpty()) body.put("price_per_gallon", pricePerGallon.toDoubleOrNull() ?: 0.0)
+                    if (totalCost.isNotEmpty()) body.put("total_cost", totalCost.toDoubleOrNull() ?: 0.0)
+                    if (placeName.isNotEmpty()) body.put("place_name", placeName)
+                    if (mileage.isNotEmpty()) body.put("truck_mileage", mileage.toIntOrNull() ?: 0)
+                    if (notes.isNotEmpty()) body.put("notes", notes)
+                    val (code, _) = apiPost("fuel.php?action=create", body)
+                    handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
+                }.start()
+            }, modifier = Modifier.fillMaxWidth(), enabled = gallons.isNotEmpty() && !isSaving, shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))) {
+                Text(if (isSaving) "Saving..." else "Save Fuel Receipt", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            if (saveMsg != null) Text(saveMsg!!, color = Color.Red, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
