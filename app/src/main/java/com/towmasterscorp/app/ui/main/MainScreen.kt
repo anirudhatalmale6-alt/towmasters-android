@@ -91,6 +91,8 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
     fun loadCalls() {
         isLoading = true
         error = null
@@ -136,13 +138,14 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
                         if (driverOnly && call.assignedDriverId != user.id) continue
                         parsed.add(call)
                     }
-                    calls = parsed
+                    handler.post { calls = parsed; isLoading = false }
+                } else {
+                    handler.post { error = "Failed to load"; isLoading = false }
                 }
             } catch (e: Exception) {
                 Log.e("CallsScreen", "Load failed", e)
-                error = e.message
+                handler.post { error = e.message; isLoading = false }
             }
-            isLoading = false
         }.start()
     }
 
@@ -195,6 +198,7 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
 @Composable
 fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
     var isUpdating by remember { mutableStateOf(false) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -258,11 +262,10 @@ fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
                                 }
                                 conn.responseCode
                                 conn.disconnect()
-                                onStatusUpdated()
+                                handler.post { isUpdating = false; onStatusUpdated() }
                             } catch (e: Exception) {
                                 Log.e("CallCard", "Update failed", e)
-                            }
-                            isUpdating = false
+                                handler.post { isUpdating = false }
                         }.start()
                     },
                     modifier = Modifier.fillMaxWidth(),

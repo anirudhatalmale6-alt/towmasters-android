@@ -86,6 +86,7 @@ fun DashboardScreen(user: User) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
         Button(
             onClick = {
                 isLoading = true
@@ -105,17 +106,22 @@ fun DashboardScreen(user: User) {
                         val json = org.json.JSONObject(responseText)
                         if (json.optBoolean("success")) {
                             val today = json.optJSONObject("today")
-                            todayCalls = today?.optInt("total_calls", 0) ?: 0
-                            activeCalls = today?.optString("active", "0")?.toIntOrNull() ?: 0
-                            completedToday = today?.optString("completed", "0")?.toIntOrNull() ?: 0
-                            todayRevenue = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
-                            driversOnline = json.optInt("drivers_active", 0)
+                            val tc = today?.optInt("total_calls", 0) ?: 0
+                            val ac = today?.optString("active", "0")?.toIntOrNull() ?: 0
+                            val ct = today?.optString("completed", "0")?.toIntOrNull() ?: 0
+                            val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
+                            val dr = json.optInt("drivers_active", 0)
+                            handler.post {
+                                todayCalls = tc; activeCalls = ac; completedToday = ct
+                                todayRevenue = tr; driversOnline = dr; isLoading = false
+                            }
+                        } else {
+                            handler.post { isLoading = false }
                         }
                     } catch (e: Exception) {
                         Log.e("Dashboard", "Load failed", e)
-                        error = e.message
+                        handler.post { error = e.message; isLoading = false }
                     }
-                    isLoading = false
                 }.start()
             },
             modifier = Modifier.fillMaxWidth()
