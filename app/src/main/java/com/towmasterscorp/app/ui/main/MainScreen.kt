@@ -3724,17 +3724,18 @@ $markers
                 Text("No active drivers found", color = Color.Gray, fontSize = 16.sp)
             }
         } else {
-            val webViewRef = remember { arrayOfNulls<android.webkit.WebView>(1) }
+            var webViewInstance by remember { mutableStateOf<android.webkit.WebView?>(null) }
 
             if (mapHtml.isNotEmpty()) {
-                val currentHtml = mapHtml
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         android.webkit.WebView(ctx).apply {
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
-                            loadDataWithBaseURL(null, currentHtml, "text/html", "UTF-8", null)
-                            webViewRef[0] = this
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            webViewInstance = this
+                            loadDataWithBaseURL("https://app.towmasterscorp.com", mapHtml, "text/html", "UTF-8", null)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f)
@@ -3758,7 +3759,9 @@ $markers
                             Text("Locate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
                                 modifier = Modifier.background(Color(0xFF007AFF), RoundedCornerShape(6.dp))
                                     .clickable {
-                                        webViewRef[0]?.evaluateJavascript("map.setView([$lat,$lng],15);L.popup().setLatLng([$lat,$lng]).setContent('${name.replace("'","\\'")}').openOn(map);", null)
+                                        val safeName = name.replace("'", "\\'").replace("\"", "\\\"")
+                                        val js = "map.setView([$lat,$lng],15);L.popup().setLatLng([$lat,$lng]).setContent('$safeName').openOn(map);"
+                                        webViewInstance?.post { webViewInstance?.evaluateJavascript(js, null) }
                                     }
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
