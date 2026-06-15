@@ -5,143 +5,140 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.theme.*
-import java.text.NumberFormat
-import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(user: User) {
-    var todayCalls by remember { mutableIntStateOf(0) }
-    var activeCalls by remember { mutableIntStateOf(0) }
-    var completedToday by remember { mutableIntStateOf(0) }
+    var todayCalls by remember { mutableStateOf(0) }
+    var activeCalls by remember { mutableStateOf(0) }
+    var completedToday by remember { mutableStateOf(0) }
     var todayRevenue by remember { mutableStateOf(0.0) }
-    var driversOnline by remember { mutableIntStateOf(0) }
-    var isLoading by remember { mutableStateOf(true) }
+    var driversOnline by remember { mutableStateOf(0) }
+    var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        try {
-            val response = ApiClient.getApi().getDashboardStats()
-            if (response.isSuccessful && response.body()?.success == true) {
-                val body = response.body()!!
-                todayCalls = body.today?.getTotalCalls() ?: 0
-                activeCalls = body.today?.getActive() ?: 0
-                completedToday = body.today?.getCompleted() ?: 0
-                todayRevenue = body.today?.getTotalRevenue() ?: 0.0
-                driversOnline = body.driversActive
-            }
-        } catch (e: Exception) {
-            Log.e("Dashboard", "Failed to load stats", e)
-            error = e.message
-        }
-        isLoading = false
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = {
-                Column {
-                    Text("Dashboard", fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "Welcome, ${user.firstName}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Dashboard",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Welcome, ${user.firstName}",
+            fontSize = 14.sp,
+            color = Color.Gray
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("Today's Overview", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Icons.Default.Phone, Primary)
-                    StatCard(Modifier.weight(1f), "Active", "$activeCalls", Icons.Default.DirectionsCar, Secondary)
-                }
+        if (error != null) {
+            Text(text = "$error", color = Color.Red, fontSize = 13.sp)
+        }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    StatCard(Modifier.weight(1f), "Completed", "$completedToday", Icons.Default.CheckCircle, Success)
-                    StatCard(Modifier.weight(1f), "Drivers Online", "$driversOnline", Icons.Default.Person, Info)
-                }
+        // Stats cards
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SimpleStatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Primary)
+            SimpleStatCard(Modifier.weight(1f), "Active", "$activeCalls", Secondary)
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SimpleStatCard(Modifier.weight(1f), "Completed", "$completedToday", Success)
+            SimpleStatCard(Modifier.weight(1f), "Drivers", "$driversOnline", Info)
+        }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Revenue", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(8.dp))
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                        val formatter = NumberFormat.getCurrencyInstance(Locale.US)
-                        Text(
-                            text = "Today: ${formatter.format(todayRevenue)}",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Success
-                        )
-                    }
-                }
-
-                if (error != null) {
-                    Text(text = "Note: $error", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Today's Revenue", fontSize = 14.sp, color = Color.Gray)
+                Text(
+                    text = "$${String.format("%.2f", todayRevenue)}",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Success
+                )
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                isLoading = true
+                error = null
+                Thread {
+                    try {
+                        val url = java.net.URL("https://app.towmasterscorp.com/api/reports.php?action=dashboard")
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                        conn.setRequestProperty("Accept", "application/json")
+                        conn.connectTimeout = 10000
+                        conn.readTimeout = 10000
+
+                        val responseText = conn.inputStream.bufferedReader().readText()
+                        conn.disconnect()
+
+                        val json = org.json.JSONObject(responseText)
+                        if (json.optBoolean("success")) {
+                            val today = json.optJSONObject("today")
+                            todayCalls = today?.optInt("total_calls", 0) ?: 0
+                            activeCalls = today?.optString("active", "0")?.toIntOrNull() ?: 0
+                            completedToday = today?.optString("completed", "0")?.toIntOrNull() ?: 0
+                            todayRevenue = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
+                            driversOnline = json.optInt("drivers_active", 0)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("Dashboard", "Load failed", e)
+                        error = e.message
+                    }
+                    isLoading = false
+                }.start()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isLoading) "Loading..." else "Load Dashboard Stats")
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
     }
 }
 
 @Composable
-fun StatCard(modifier: Modifier = Modifier, title: String, value: String, icon: ImageVector, color: Color) {
+fun SimpleStatCard(modifier: Modifier = Modifier, title: String, value: String, color: Color) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
-            Text(text = title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(text = value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(text = title, fontSize = 12.sp, color = Color.Gray)
         }
     }
 }

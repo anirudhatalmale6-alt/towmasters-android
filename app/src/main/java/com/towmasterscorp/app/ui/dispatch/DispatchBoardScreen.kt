@@ -23,7 +23,7 @@ import com.towmasterscorp.app.data.models.Call
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun DispatchBoardScreen(
     user: User,

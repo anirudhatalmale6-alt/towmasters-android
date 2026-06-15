@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun CallDetailScreen(
     callId: Int,

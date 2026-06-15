@@ -23,7 +23,7 @@ import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.theme.*
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun ChatListScreen(
     user: User,

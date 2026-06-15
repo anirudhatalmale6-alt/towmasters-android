@@ -23,14 +23,14 @@ import com.towmasterscorp.app.ui.dispatch.DispatchBoardScreen
 import com.towmasterscorp.app.ui.driver.DriverJobsScreen
 import com.towmasterscorp.app.ui.more.MoreMenuScreen
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun MainScreen(
     user: User,
     authPreferences: AuthPreferences,
     onLogout: () -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableStateOf(0) }
 
     val isAdmin = user.role == "admin" || user.role == "dispatcher"
 

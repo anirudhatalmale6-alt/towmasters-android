@@ -19,7 +19,7 @@ import com.towmasterscorp.app.data.models.Call
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.ui.dispatch.DispatchCallCard
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun CallsListScreen(
     user: User,
