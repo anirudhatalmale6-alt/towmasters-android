@@ -155,11 +155,10 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
         }.start()
     }
 
-    // Auto-load on first render using Handler
-    var hasLoaded by remember { mutableStateOf(false) }
-    if (!hasLoaded) {
-        hasLoaded = true
-        handler.postDelayed({ loadCalls() }, 100)
+    // Auto-load on first render - use AtomicBoolean to avoid Compose state change during composition
+    val autoLoaded = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    if (autoLoaded.compareAndSet(false, true)) {
+        handler.postDelayed({ loadCalls() }, 500)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
