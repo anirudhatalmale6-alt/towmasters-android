@@ -155,10 +155,6 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
         }.start()
     }
 
-    LaunchedEffect(Unit) {
-        loadCalls()
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -169,20 +165,25 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = { loadCalls() }) {
-                Text("Refresh")
+            Button(
+                onClick = { loadCalls() },
+                enabled = !isLoading
+            ) {
+                Text(if (isLoading) "Loading..." else "Load")
             }
         }
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                Text("Loading calls...", color = Color.Gray)
             }
         } else if (error != null) {
             Text(text = "Error: $error", color = Color.Red, modifier = Modifier.padding(16.dp))
         } else if (calls.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No calls found", color = Color.Gray, fontSize = 16.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Tap Load to fetch calls", color = Color.Gray, fontSize = 16.sp)
+                }
             }
         } else {
             Column(
