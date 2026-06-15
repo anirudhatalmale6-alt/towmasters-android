@@ -8,6 +8,8 @@ import com.towmasterscorp.app.data.models.LoginRequest
 import com.towmasterscorp.app.data.models.LoginResponse
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.data.preferences.AuthPreferences
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,10 +85,8 @@ class LoginViewModel(
                     .build()
 
                 val jsonBody = """{"email":"${state.email.trim()}","password":"${state.password}"}"""
-                val requestBody = okhttp3.RequestBody.create(
-                    okhttp3.MediaType.parse("application/json; charset=utf-8"),
-                    jsonBody
-                )
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val requestBody = jsonBody.toRequestBody(mediaType)
 
                 val request = okhttp3.Request.Builder()
                     .url("https://app.towmasterscorp.com/api/auth.php?action=login")
@@ -94,10 +94,10 @@ class LoginViewModel(
                     .build()
 
                 val response = client.newCall(request).execute()
-                val responseBody = response.body()?.string() ?: ""
+                val responseBody = response.body?.string() ?: ""
                 response.close()
 
-                Log.d("LoginVM", "Response: ${response.code()} - $responseBody")
+                Log.d("LoginVM", "Response: ${response.code} - $responseBody")
 
                 val gson = com.google.gson.Gson()
                 val result = gson.fromJson(responseBody, LoginResponse::class.java)
