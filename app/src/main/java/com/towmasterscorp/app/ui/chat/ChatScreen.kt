@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.towmasterscorp.app.ui.chat
 
 import androidx.compose.foundation.background
