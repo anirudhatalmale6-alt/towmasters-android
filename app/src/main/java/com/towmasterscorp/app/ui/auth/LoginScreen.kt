@@ -1,5 +1,6 @@
 package com.towmasterscorp.app.ui.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -21,7 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.towmasterscorp.app.ui.theme.Primary
+import com.towmasterscorp.app.R
 
 @Composable
 fun LoginScreen(
@@ -49,24 +51,16 @@ fun LoginScreen(
                 .padding(horizontal = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(120.dp))
+            Spacer(modifier = Modifier.height(100.dp))
 
-            // TM Logo placeholder
-            Surface(
-                modifier = Modifier.size(80.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xFFE8E8E8),
-                shadowElevation = 4.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Row {
-                        Text("T", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Primary)
-                        Text("M", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
-                    }
-                }
-            }
+            // Logo
+            Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "TowMasters Logo",
+                modifier = Modifier.size(100.dp)
+            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "TowMasters",
@@ -81,7 +75,7 @@ fun LoginScreen(
                 color = Color.Gray
             )
 
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(60.dp))
 
             // Email Field
             OutlinedTextField(
