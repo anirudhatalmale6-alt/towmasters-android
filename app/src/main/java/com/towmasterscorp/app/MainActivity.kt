@@ -37,11 +37,19 @@ class MainActivity : ComponentActivity() {
     companion object {
         var pendingCallId: Int? = null
             private set
+        var pendingNavTarget: String? = null
+            private set
 
         fun consumePendingCallId(): Int? {
             val id = pendingCallId
             pendingCallId = null
             return id
+        }
+
+        fun consumePendingNavTarget(): String? {
+            val t = pendingNavTarget
+            pendingNavTarget = null
+            return t
         }
     }
 
@@ -86,9 +94,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
-        val callId = intent?.getStringExtra("call_id")?.toIntOrNull()
-        if (callId != null) {
-            pendingCallId = callId
+        val notifType = intent?.getStringExtra("notification_type") ?: ""
+        if (notifType == "chat") {
+            pendingNavTarget = "chat"
+        } else {
+            val callId = intent?.getStringExtra("call_id")?.toIntOrNull()
+            if (callId != null) {
+                pendingCallId = callId
+            }
         }
     }
 

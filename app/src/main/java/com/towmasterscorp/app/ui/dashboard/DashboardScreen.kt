@@ -126,7 +126,7 @@ fun DashboardScreen(user: User) {
             Text("Today's Overview", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Color(0xFF007AFF))
+                StatCard(Modifier.weight(1f), "Today's Calls", "$todayCalls", Color(0xFF007AFF))
                 StatCard(Modifier.weight(1f), "Completed", "$completedToday", Color(0xFF34C759))
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

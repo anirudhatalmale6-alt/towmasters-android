@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,10 +67,15 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     var selectedCallId by remember { mutableStateOf<Int?>(null) }
+    var showCreateCall by remember { mutableStateOf(false) }
+    // Change #14: track pending nav target for chat notifications
+    var navigateToChat by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val pending = MainActivity.consumePendingCallId()
         if (pending != null) selectedCallId = pending
+        val navTarget = MainActivity.consumePendingNavTarget()
+        if (navTarget == "chat") navigateToChat = true
     }
 
     LaunchedEffect(Unit) {
@@ -77,6 +83,8 @@ fun MainScreen(
             kotlinx.coroutines.delay(1000)
             val pending = MainActivity.consumePendingCallId()
             if (pending != null) selectedCallId = pending
+            val navTarget = MainActivity.consumePendingNavTarget()
+            if (navTarget == "chat") navigateToChat = true
         }
     }
 
@@ -109,14 +117,27 @@ fun MainScreen(
         }
     }
 
-    if (selectedCallId != null) {
+    // Change #14: if navigateToChat, show chat directly
+    if (navigateToChat) {
+        ChatScreen(user = user) { navigateToChat = false }
+    } else if (showCreateCall) {
+        CreateCallScreen(user = user, onBack = { showCreateCall = false }, onCreated = { newId ->
+            showCreateCall = false
+            if (newId != null) selectedCallId = newId
+        })
+    } else if (selectedCallId != null) {
         CallDetailContent(
             callId = selectedCallId!!,
             user = user,
             onBack = { selectedCallId = null }
         )
     } else {
-        MainTabContent(user = user, onLogout = onLogout, onCallClick = { selectedCallId = it })
+        MainTabContent(
+            user = user,
+            onLogout = onLogout,
+            onCallClick = { selectedCallId = it },
+            onCreateCall = { showCreateCall = true }
+        )
     }
 }
 
@@ -124,7 +145,8 @@ fun MainScreen(
 private fun MainTabContent(
     user: User,
     onLogout: () -> Unit,
-    onCallClick: (Int) -> Unit
+    onCallClick: (Int) -> Unit,
+    onCreateCall: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val isAdmin = user.role == "admin" || user.role == "dispatcher"
@@ -150,7 +172,7 @@ private fun MainTabContent(
             if (isAdmin) {
                 when (selectedTab) {
                     0 -> DashboardScreen(user = user)
-                    1 -> CallsScreen("Dispatch Board", activeOnly = true, user = user, onCallClick = onCallClick)
+                    1 -> CallsScreen("Dispatch Board", activeOnly = true, user = user, onCallClick = onCallClick, onCreateCall = onCreateCall)
                     2 -> CallsScreen("All Calls", activeOnly = false, user = user, onCallClick = onCallClick)
                     3 -> SimpleMoreScreen(user = user, onLogout = onLogout)
                 }
@@ -203,12 +225,33 @@ fun CallsScreen(
     activeOnly: Boolean,
     user: User,
     driverOnly: Boolean = false,
-    onCallClick: (Int) -> Unit
+    onCallClick: (Int) -> Unit,
+    onCreateCall: (() -> Unit)? = null
 ) {
     var calls by remember { mutableStateOf<List<Call>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    // Change #1: Clock in/out state for drivers
+    var isClockedIn by remember { mutableStateOf(user.isClockedIn != 0) }
+    var isClockToggling by remember { mutableStateOf(false) }
+
+    fun toggleClock() {
+        if (isClockToggling) return
+        isClockToggling = true
+        val action = if (isClockedIn) "clock-out" else "clock-in"
+        Thread {
+            val body = org.json.JSONObject()
+            val (code, _) = apiPost("users.php?action=$action", body)
+            handler.post {
+                isClockToggling = false
+                if (code in 200..299) {
+                    isClockedIn = !isClockedIn
+                }
+            }
+        }.start()
+    }
 
     fun loadCalls() {
         isLoading = true
@@ -296,6 +339,7 @@ fun CallsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Header row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -305,12 +349,24 @@ fun CallsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = title, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text(
-                text = if (isLoading) "Loading..." else "Refresh",
-                fontSize = 14.sp,
-                color = Color(0xFF007AFF),
-                modifier = Modifier.clickable(enabled = !isLoading) { loadCalls() }
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Change #13: Create call button for dispatch board
+                if (onCreateCall != null) {
+                    Text(
+                        text = "+ New Call",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF007AFF),
+                        modifier = Modifier.clickable { onCreateCall() }
+                    )
+                }
+                Text(
+                    text = if (isLoading) "Loading..." else "Refresh",
+                    fontSize = 14.sp,
+                    color = Color(0xFF007AFF),
+                    modifier = Modifier.clickable(enabled = !isLoading) { loadCalls() }
+                )
+            }
         }
 
         if (isLoading && calls.isEmpty()) {
@@ -330,8 +386,20 @@ fun CallsScreen(
                 }
             }
         } else if (calls.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No calls found", color = Color.Gray, fontSize = 16.sp)
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                // Change #1: Clock banner for drivers even when empty
+                if (driverOnly) {
+                    ClockBanner(isClockedIn = isClockedIn, isToggling = isClockToggling, onToggle = { toggleClock() })
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                // Change #2: Summary stat cards
+                CallStatCards(calls = calls)
+                Spacer(modifier = Modifier.height(16.dp))
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text("No calls found", color = Color.Gray, fontSize = 16.sp)
+                }
             }
         } else {
             Column(
@@ -341,6 +409,14 @@ fun CallsScreen(
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Change #1: Clock in/out banner for drivers
+                if (driverOnly) {
+                    ClockBanner(isClockedIn = isClockedIn, isToggling = isClockToggling, onToggle = { toggleClock() })
+                }
+
+                // Change #2: Summary stat cards
+                CallStatCards(calls = calls)
+
                 calls.forEach { call ->
                     CallCard(
                         call = call,
@@ -349,6 +425,88 @@ fun CallsScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
+        }
+    }
+}
+
+// Change #1: Clock In/Out Banner composable
+@Composable
+fun ClockBanner(isClockedIn: Boolean, isToggling: Boolean, onToggle: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (isClockedIn) Color(0xFF34C759) else Color(0xFF8E8E93))
+                )
+                Text(
+                    text = if (isClockedIn) "You're Clocked In" else "You're Clocked Out",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isClockedIn) Color(0xFF34C759) else Color(0xFF8E8E93)
+                )
+            }
+            Text(
+                text = if (isToggling) "..." else if (isClockedIn) "Clock Out" else "Clock In",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier
+                    .background(
+                        if (isClockedIn) Color(0xFFFF3B30) else Color(0xFF34C759),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .clickable(enabled = !isToggling) { onToggle() }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            )
+        }
+    }
+}
+
+// Change #2: Summary Stat Cards composable
+@Composable
+fun CallStatCards(calls: List<Call>) {
+    val totalCount = calls.size
+    val pendingStatuses = listOf("pending", "dispatched")
+    val completedStatuses = listOf("completed", "canceled")
+    val pendingCount = calls.count { it.status in pendingStatuses }
+    val inProgressCount = calls.count { it.status !in pendingStatuses && it.status !in completedStatuses }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatCard(label = "Assigned", count = totalCount, color = Color(0xFF007AFF), modifier = Modifier.weight(1f))
+        StatCard(label = "In Progress", count = inProgressCount, color = Color(0xFFFF9500), modifier = Modifier.weight(1f))
+        StatCard(label = "Pending", count = pendingCount, color = Color(0xFFFFCC00), modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+fun StatCard(label: String, count: Int, color: Color, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("$count", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(label, fontSize = 11.sp, color = color, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -368,6 +526,27 @@ fun StatusBadge(status: String) {
     )
 }
 
+// Change #4: Priority badge composable - shows for all non-normal priorities
+@Composable
+fun PriorityBadge(priority: String?) {
+    if (priority == null || priority == "normal") return
+    val priColor = when (priority) {
+        "low" -> Color(0xFF8E8E93)
+        "high" -> Color(0xFFFF9500)
+        "urgent", "emergency" -> Color(0xFFFF3B30)
+        else -> Color(0xFF007AFF)
+    }
+    Text(
+        text = priority.uppercase(),
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = priColor,
+        modifier = Modifier
+            .background(priColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
+}
+
 @Composable
 fun CallCard(call: Call, onClick: () -> Unit) {
     val statusColor = getStatusColor(call.status)
@@ -377,8 +556,7 @@ fun CallCard(call: Call, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.08f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = null
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -460,7 +638,16 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
     var isEditing by remember { mutableStateOf(false) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
 
+    // Change #6: photos count
+    var photosCount by remember { mutableStateOf(0) }
+
+    // Change #7: truck info from call_drivers
+    var truckYear by remember { mutableStateOf<String?>(null) }
+    var truckMake by remember { mutableStateOf<String?>(null) }
+    var truckModel by remember { mutableStateOf<String?>(null) }
+
     fun loadCall() {
+        // Change #3: Don't clear call during loading to avoid title disappearing
         isLoading = true
         error = null
         Thread {
@@ -492,6 +679,25 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                             ))
                         }
                     }
+
+                    // Change #7: Parse truck info from call_drivers
+                    var parsedTruckYear: String? = null
+                    var parsedTruckMake: String? = null
+                    var parsedTruckModel: String? = null
+                    val callDriversArr = c.optJSONArray("call_drivers")
+                    if (callDriversArr != null && callDriversArr.length() > 0) {
+                        val cd = callDriversArr.getJSONObject(0)
+                        val ty = cd.optString("truck_year", "")
+                        val tm = cd.optString("truck_make", "")
+                        val tmod = cd.optString("truck_model", "")
+                        if (ty.isNotEmpty() && ty != "null" && ty != "0") parsedTruckYear = ty
+                        if (tm.isNotEmpty() && tm != "null") parsedTruckMake = tm
+                        if (tmod.isNotEmpty() && tmod != "null") parsedTruckModel = tmod
+                    }
+
+                    // Change #6: Parse photos count
+                    val photosArr = c.optJSONArray("photos")
+                    val pCount = photosArr?.length() ?: 0
 
                     val parsed = Call(
                         id = c.optInt("id"),
@@ -572,6 +778,10 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         taxRate = tr
                         taxAmount = ta
                         amountPaid = ap
+                        photosCount = pCount
+                        truckYear = parsedTruckYear
+                        truckMake = parsedTruckMake
+                        truckModel = parsedTruckModel
                         isLoading = false
                     }
                 } else {
@@ -634,6 +844,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        // Change #3: Always show call number - use call?.callNumber when available, fallback to "Call #$callId"
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -649,7 +860,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = call?.callNumber ?: "Call #$callId",
+                text = if (!call?.callNumber.isNullOrEmpty()) call!!.callNumber!! else "Call #$callId",
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             )
@@ -672,7 +883,8 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
 
         Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
 
-        if (isLoading) {
+        // Change #3: Only show loading when call is null (first load)
+        if (isLoading && call == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Loading...", color = Color.Gray, fontSize = 16.sp)
             }
@@ -689,7 +901,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header Card
+                // Header Card - Change #4: show priority badge for ALL non-normal priorities
                 DetailSection {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -709,22 +921,8 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                                         .background(Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
-                                if (c.priority != null && c.priority != "normal") {
-                                    val priColor = when (c.priority) {
-                                        "high" -> Color(0xFFFF9500)
-                                        "urgent", "emergency" -> Color(0xFFFF3B30)
-                                        else -> Color(0xFF007AFF)
-                                    }
-                                    Text(
-                                        text = c.priority.uppercase(),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = priColor,
-                                        modifier = Modifier
-                                            .background(priColor.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
+                                // Change #4: Show priority badge for low, high, urgent
+                                PriorityBadge(c.priority)
                             }
                         }
                         StatusBadge(c.status)
@@ -803,7 +1001,6 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 }
 
                 // Vehicle Section
-                val hasVehicle = c.vehicleDescription.isNotEmpty() || c.vehicleLicenseSafe != null || c.vehicleVinSafe != null || c.vehicleColorSafe != null
                 DetailSection {
                     Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -817,6 +1014,17 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         DetailRow("Plate", "${c.vehicleLicenseSafe} ${c.plateStateSafe ?: ""}".trim())
                     }
                     if (c.vehicleVinSafe != null) DetailRow("VIN", c.vehicleVinSafe!!)
+                }
+
+                // Change #6: Photos Section
+                DetailSection {
+                    Text("Photos", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (photosCount > 0) {
+                        Text("$photosCount photo${if (photosCount != 1) "s" else ""} attached", fontSize = 14.sp, color = Color(0xFF007AFF))
+                    } else {
+                        Text("No photos attached", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                    }
                 }
 
                 // People Section
@@ -870,19 +1078,29 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                     }
                 }
 
-                // Assignment Section
+                // Assignment Section - Change #7: Show truck year/make/model
                 val hasAssignment = !c.driverName.isNullOrEmpty() || !c.truckNumber.isNullOrEmpty()
                 if (hasAssignment) {
                     DetailSection {
                         Text("Assignment", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.height(6.dp))
                         if (!c.driverName.isNullOrEmpty()) DetailRow("Driver", c.driverName!!)
-                        if (!c.truckNumber.isNullOrEmpty()) DetailRow("Truck", c.truckNumber!!)
+                        if (!c.truckNumber.isNullOrEmpty()) {
+                            val truckInfo = buildString {
+                                append(c.truckNumber!!)
+                                val ymm = listOfNotNull(truckYear, truckMake, truckModel).filter { it.isNotEmpty() }
+                                if (ymm.isNotEmpty()) {
+                                    append(" - ")
+                                    append(ymm.joinToString(" "))
+                                }
+                            }
+                            DetailRow("Truck", truckInfo)
+                        }
                         if (!c.dispatcherName.isNullOrEmpty()) DetailRow("Dispatcher", c.dispatcherName!!)
                     }
                 }
 
-                // Billing Section
+                // Billing Section - Change #8: SpaceBetween on all billing rows via DetailRow
                 val hasAmounts = c.totalAmount != null || c.baseRate != null || charges.isNotEmpty()
                 if (hasAmounts) {
                     DetailSection {
@@ -963,6 +1181,49 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                             if (c.dispatchNotesSafe != null) Spacer(modifier = Modifier.height(6.dp))
                             Text("Driver Notes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9500))
                             Text(c.driverNotesSafe!!, fontSize = 14.sp)
+                        }
+                    }
+                }
+
+                // Change #5: Timeline Section
+                val timelineEntries = listOfNotNull(
+                    c.createdAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "Created" to it },
+                    c.dispatchedAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "Dispatched" to it },
+                    c.enRouteAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "En Route" to it },
+                    c.onSceneAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "On Scene" to it },
+                    c.hookedAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "Hooked" to it },
+                    c.deliveredAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "Delivered" to it },
+                    c.completedAt?.takeIf { it.isNotEmpty() && it != "null" }?.let { "Completed" to it }
+                )
+                if (timelineEntries.isNotEmpty()) {
+                    DetailSection {
+                        Text("Timeline", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        timelineEntries.forEach { (label, dateStr) ->
+                            val dotColor = when (label) {
+                                "Created" -> Color(0xFF8E8E93)
+                                "Dispatched" -> Color(0xFF007AFF)
+                                "En Route" -> Color(0xFFAF52DE)
+                                "On Scene" -> Color(0xFF5856D6)
+                                "Hooked" -> Color(0xFF5AC8FA)
+                                "Delivered" -> Color(0xFF34C759)
+                                "Completed" -> Color(0xFF8E8E93)
+                                else -> Color(0xFF8E8E93)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(dotColor)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF333333), modifier = Modifier.width(80.dp))
+                                Text(dateStr, fontSize = 12.sp, color = Color(0xFF8E8E93))
+                            }
                         }
                     }
                 }
@@ -1247,6 +1508,7 @@ fun DetailSection(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+// Change #8: Billing alignment fix - value text aligned to end
 @Composable
 fun DetailRow(label: String, value: String) {
     Row(
@@ -1254,7 +1516,7 @@ fun DetailRow(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, fontSize = 13.sp, color = Color(0xFF8E8E93), modifier = Modifier.width(90.dp))
-        Text(value, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(value, fontSize = 13.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
 
@@ -1635,17 +1897,22 @@ fun InspectionsScreen(user: User, onBack: () -> Unit) {
     }
 }
 
+// Change #9: Added fuel level selector
+// Change #10: Show truck year in truck selection list
 @Composable
 fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit, onCreated: () -> Unit) {
     var selectedTruckId by remember { mutableStateOf("") }
     var inspectionType by remember { mutableStateOf("pre_trip") }
     var odometer by remember { mutableStateOf("") }
+    var fuelLevel by remember { mutableStateOf("full") }
     var notes by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
     var saveMsg by remember { mutableStateOf<String?>(null) }
     val checkItems = listOf("tires", "brakes", "lights", "mirrors", "horn", "wipers", "fluids", "boom_winch", "wheel_lift", "chains_straps", "safety_equipment", "body_damage")
     val checkStates = remember { mutableStateMapOf<String, Int>().apply { checkItems.forEach { put(it, 1) } } }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    val fuelLevels = listOf("full" to "Full", "three_quarter" to "3/4", "half" to "1/2", "quarter" to "1/4", "empty" to "Empty")
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
         ScreenHeader("New Inspection", onBack)
@@ -1657,11 +1924,24 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                 } else {
                     trucks.forEach { truck ->
                         val tid = truck.optInt("id").toString()
+                        // Change #10: Show "Unit# - Year Make Model"
+                        val unitNum = truck.optString("unit_number", "")
+                        val tYear = truck.optString("year", "").let { if (it == "0" || it == "null") "" else it }
+                        val tMake = truck.optString("make", "")
+                        val tModel = truck.optString("model", "")
+                        val truckLabel = buildString {
+                            append(unitNum)
+                            val ymm = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() }
+                            if (ymm.isNotEmpty()) {
+                                append(" - ")
+                                append(ymm.joinToString(" "))
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth().clickable { selectedTruckId = tid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (selectedTruckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                                 contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("${truck.optString("unit_number", "")} - ${truck.optString("make", "")} ${truck.optString("model", "")}", fontSize = 14.sp)
+                            Text(truckLabel, fontSize = 14.sp)
                         }
                     }
                 }
@@ -1677,6 +1957,17 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 EditField("Odometer", odometer) { odometer = it }
+
+                // Change #9: Fuel Level selector
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Fuel Level", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    fuelLevels.forEach { (value, label) ->
+                        val sel = fuelLevel == value
+                        Text(label, fontSize = 12.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) Color.White else Color(0xFF007AFF),
+                            modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(8.dp)).clickable { fuelLevel = value }.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                }
             }
             DetailSection {
                 Text("Checklist", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -1704,6 +1995,7 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
                     body.put("truck_id", selectedTruckId.toInt())
                     body.put("inspection_type", inspectionType)
                     if (odometer.isNotEmpty()) body.put("odometer", odometer.toIntOrNull() ?: 0)
+                    body.put("fuel_level", fuelLevel)
                     body.put("notes", notes)
                     checkItems.forEach { body.put(it, checkStates[it] ?: 1) }
                     val (code, _) = apiPost("inspections.php?action=create", body)
@@ -1719,6 +2011,7 @@ fun CreateInspectionScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit
     }
 }
 
+// Change #12: Show truck year/make/model in fuel receipts list
 @Composable
 fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
     var receipts by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
@@ -1771,7 +2064,21 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
                         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(receipt.optString("truck_number", receipt.optString("place_name", "Fuel Receipt")), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    // Change #12: Show truck year/make/model
+                                    val truckNum = receipt.optString("truck_number", "")
+                                    val tYear = receipt.optString("truck_year", "").let { if (it == "0" || it == "null" || it.isEmpty()) "" else it }
+                                    val tMake = receipt.optString("truck_make", "").let { if (it == "null") "" else it }
+                                    val tModel = receipt.optString("truck_model", "").let { if (it == "null") "" else it }
+                                    val truckDisplay = buildString {
+                                        if (truckNum.isNotEmpty()) append(truckNum)
+                                        else append(receipt.optString("place_name", "Fuel Receipt"))
+                                        val ymm = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() }
+                                        if (ymm.isNotEmpty()) {
+                                            append(" - ")
+                                            append(ymm.joinToString(" "))
+                                        }
+                                    }
+                                    Text(truckDisplay, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                                     val amount = receipt.optDouble("total_cost", 0.0)
                                     if (amount > 0) Text("$${String.format("%.2f", amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF34C759))
                                 }
@@ -1792,6 +2099,7 @@ fun FuelReceiptsScreen(user: User, onBack: () -> Unit) {
     }
 }
 
+// Change #11: Added date, fuel type, station address fields
 @Composable
 fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Unit, onCreated: () -> Unit) {
     var selectedTruckId by remember { mutableStateOf("") }
@@ -1801,9 +2109,17 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
     var placeName by remember { mutableStateOf("") }
     var mileage by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var receiptDate by remember { mutableStateOf("") }
+    var fuelType by remember { mutableStateOf("regular") }
+    var stationAddress by remember { mutableStateOf("") }
+    var stationCity by remember { mutableStateOf("") }
+    var stationState by remember { mutableStateOf("") }
+    var stationZip by remember { mutableStateOf("") }
     var isSaving by remember { mutableStateOf(false) }
     var saveMsg by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    val fuelTypes = listOf("regular" to "Regular", "mid_grade" to "Mid Grade", "premium" to "Premium", "diesel" to "Diesel", "def" to "DEF")
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
         ScreenHeader("New Fuel Receipt", onBack)
@@ -1815,21 +2131,55 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                 } else {
                     trucks.forEach { truck ->
                         val tid = truck.optInt("id").toString()
+                        val unitNum = truck.optString("unit_number", "")
+                        val tYear = truck.optString("year", "").let { if (it == "0" || it == "null") "" else it }
+                        val tMake = truck.optString("make", "")
+                        val tModel = truck.optString("model", "")
+                        val truckLabel = buildString {
+                            append(unitNum)
+                            val ymm = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() }
+                            if (ymm.isNotEmpty()) {
+                                append(" - ")
+                                append(ymm.joinToString(" "))
+                            }
+                        }
                         Row(modifier = Modifier.fillMaxWidth().clickable { selectedTruckId = tid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (selectedTruckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                                 contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(truck.optString("unit_number", ""), fontSize = 14.sp)
+                            Text(truckLabel, fontSize = 14.sp)
                         }
                     }
                 }
             }
             DetailSection {
                 Text("Fuel Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+                // Change #11: Date field
+                EditField("Date (YYYY-MM-DD)", receiptDate) { receiptDate = it }
+
+                // Change #11: Fuel type selector
+                Text("Fuel Type", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    fuelTypes.forEach { (value, label) ->
+                        val sel = fuelType == value
+                        Text(label, fontSize = 11.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) Color.White else Color(0xFF007AFF),
+                            modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(8.dp)).clickable { fuelType = value }.padding(horizontal = 8.dp, vertical = 6.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+
                 EditField("Gallons", gallons) { gallons = it }
                 EditField("Price per Gallon", pricePerGallon) { pricePerGallon = it }
                 EditField("Total Cost", totalCost) { totalCost = it }
                 EditField("Station Name", placeName) { placeName = it }
+
+                // Change #11: Station address fields
+                EditField("Station Address", stationAddress) { stationAddress = it }
+                EditField("City", stationCity) { stationCity = it }
+                EditField("State", stationState) { stationState = it }
+                EditField("Zip", stationZip) { stationZip = it }
+
                 EditField("Truck Mileage", mileage) { mileage = it }
                 EditField("Notes", notes) { notes = it }
             }
@@ -1845,6 +2195,12 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
                     if (placeName.isNotEmpty()) body.put("place_name", placeName)
                     if (mileage.isNotEmpty()) body.put("truck_mileage", mileage.toIntOrNull() ?: 0)
                     if (notes.isNotEmpty()) body.put("notes", notes)
+                    if (receiptDate.isNotEmpty()) body.put("receipt_date", receiptDate)
+                    body.put("fuel_type", fuelType)
+                    if (stationAddress.isNotEmpty()) body.put("station_address", stationAddress)
+                    if (stationCity.isNotEmpty()) body.put("station_city", stationCity)
+                    if (stationState.isNotEmpty()) body.put("station_state", stationState)
+                    if (stationZip.isNotEmpty()) body.put("station_zip", stationZip)
                     val (code, _) = apiPost("fuel.php?action=create", body)
                     handler.post { isSaving = false; if (code in 200..299) onCreated() else saveMsg = "Failed (HTTP $code)" }
                 }.start()
@@ -1854,6 +2210,345 @@ fun CreateFuelReceiptScreen(trucks: List<org.json.JSONObject>, onBack: () -> Uni
             }
             if (saveMsg != null) Text(saveMsg!!, color = Color.Red, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+// Change #13: Create Call Screen
+@Composable
+fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) {
+    var callType by remember { mutableStateOf("tow") }
+    var priority by remember { mutableStateOf("normal") }
+    var callerName by remember { mutableStateOf("") }
+    var callerPhone by remember { mutableStateOf("") }
+    var vehicleYear by remember { mutableStateOf("") }
+    var vehicleMake by remember { mutableStateOf("") }
+    var vehicleModel by remember { mutableStateOf("") }
+    var vehicleColor by remember { mutableStateOf("") }
+    var vehicleLicense by remember { mutableStateOf("") }
+    var vehicleVin by remember { mutableStateOf("") }
+    var pickupAddress by remember { mutableStateOf("") }
+    var pickupCity by remember { mutableStateOf("") }
+    var pickupState by remember { mutableStateOf("") }
+    var pickupZip by remember { mutableStateOf("") }
+    var dropoffAddress by remember { mutableStateOf("") }
+    var dropoffCity by remember { mutableStateOf("") }
+    var dropoffState by remember { mutableStateOf("") }
+    var dropoffZip by remember { mutableStateOf("") }
+    var selectedDriverId by remember { mutableStateOf("") }
+    var selectedTruckId by remember { mutableStateOf("") }
+    var dispatchNotes by remember { mutableStateOf("") }
+    var reasonForTow by remember { mutableStateOf("") }
+    var baseRate by remember { mutableStateOf("") }
+    var mileageRate by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveMsg by remember { mutableStateOf<String?>(null) }
+    var drivers by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var trucks by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoadingOptions by remember { mutableStateOf(true) }
+    var isDecodingVin by remember { mutableStateOf(false) }
+    var vinMessage by remember { mutableStateOf<String?>(null) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    val callTypes = listOf("tow", "jumpstart", "lockout", "tire_change", "fuel_delivery", "winch", "transport", "impound", "recovery", "other")
+    val priorities = listOf("low", "normal", "high", "urgent")
+
+    fun decodeVin(vin: String) {
+        if (vin.length != 17) return
+        isDecodingVin = true
+        vinMessage = null
+        Thread {
+            try {
+                val url = java.net.URL("https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/$vin?format=json")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                val results = json.optJSONArray("Results")
+                var year = ""
+                var make = ""
+                var model = ""
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val r = results.getJSONObject(i)
+                        val variable = r.optString("Variable", "")
+                        val value = r.optString("Value", "")
+                        if (value.isNotEmpty() && value != "null") {
+                            when (variable) {
+                                "Model Year" -> year = value
+                                "Make" -> make = value
+                                "Model" -> model = value
+                            }
+                        }
+                    }
+                }
+                handler.post {
+                    isDecodingVin = false
+                    if (year.isNotEmpty() || make.isNotEmpty() || model.isNotEmpty()) {
+                        if (year.isNotEmpty()) vehicleYear = year
+                        if (make.isNotEmpty()) vehicleMake = make
+                        if (model.isNotEmpty()) vehicleModel = model
+                        vinMessage = "Found: ${listOf(year, make, model).filter { it.isNotEmpty() }.joinToString(" ")}"
+                    } else {
+                        vinMessage = "No vehicle data found"
+                    }
+                }
+            } catch (e: Exception) {
+                handler.post { isDecodingVin = false; vinMessage = "VIN decode failed" }
+            }
+        }.start()
+    }
+
+    // Load drivers and trucks
+    LaunchedEffect(Unit) {
+        Thread {
+            val driverList = mutableListOf<org.json.JSONObject>()
+            val truckList = mutableListOf<org.json.JSONObject>()
+            val driverText = apiGet("users.php?action=list&role=driver")
+            if (driverText != null) {
+                val json = org.json.JSONObject(driverText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("users") ?: org.json.JSONArray()
+                    for (i in 0 until arr.length()) driverList.add(arr.getJSONObject(i))
+                }
+            }
+            val truckText = apiGet("trucks.php?action=list")
+            if (truckText != null) {
+                val json = org.json.JSONObject(truckText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("trucks") ?: org.json.JSONArray()
+                    for (i in 0 until arr.length()) truckList.add(arr.getJSONObject(i))
+                }
+            }
+            handler.post { drivers = driverList; trucks = truckList; isLoadingOptions = false }
+        }.start()
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("New Call", onBack)
+
+        if (isLoadingOptions) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else {
+            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Call Type
+                DetailSection {
+                    Text("Call Type", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        callTypes.chunked(4).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                row.forEach { ct ->
+                                    val sel = callType == ct
+                                    val label = ct.replace("_", " ").replaceFirstChar { it.uppercase() }
+                                    Text(label, fontSize = 11.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (sel) Color.White else Color(0xFF007AFF),
+                                        modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                            .clickable { callType = ct }.padding(horizontal = 8.dp, vertical = 5.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Priority
+                DetailSection {
+                    Text("Priority", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        priorities.forEach { pri ->
+                            val sel = priority == pri
+                            val priColor = when (pri) {
+                                "low" -> Color(0xFF8E8E93)
+                                "normal" -> Color(0xFF007AFF)
+                                "high" -> Color(0xFFFF9500)
+                                "urgent" -> Color(0xFFFF3B30)
+                                else -> Color(0xFF007AFF)
+                            }
+                            Text(pri.replaceFirstChar { it.uppercase() }, fontSize = 12.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                color = if (sel) Color.White else priColor,
+                                modifier = Modifier.background(if (sel) priColor else priColor.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                    .clickable { priority = pri }.padding(horizontal = 12.dp, vertical = 6.dp))
+                        }
+                    }
+                }
+
+                // Caller info
+                DetailSection {
+                    Text("Caller", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    EditField("Caller Name", callerName) { callerName = it }
+                    EditField("Caller Phone", callerPhone) { callerPhone = it }
+                }
+
+                // Vehicle info with VIN decode
+                DetailSection {
+                    Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    EditField("Year", vehicleYear) { vehicleYear = it }
+                    EditField("Make", vehicleMake) { vehicleMake = it }
+                    EditField("Model", vehicleModel) { vehicleModel = it }
+                    EditField("Color", vehicleColor) { vehicleColor = it }
+                    EditField("License Plate", vehicleLicense) { vehicleLicense = it }
+                    OutlinedTextField(
+                        value = vehicleVin,
+                        onValueChange = { newVal ->
+                            vehicleVin = newVal
+                            val cleaned = newVal.trim().uppercase()
+                            if (cleaned.length == 17) decodeVin(cleaned)
+                        },
+                        label = { Text("VIN", fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color(0xFFD1D1D6),
+                            unfocusedContainerColor = Color(0xFFF9F9F9)
+                        ),
+                        trailingIcon = {
+                            if (isDecodingVin) {
+                                Text("...", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                            } else if (vehicleVin.trim().length == 17) {
+                                Text("Decode", fontSize = 13.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { decodeVin(vehicleVin.trim().uppercase()) }.padding(end = 8.dp))
+                            }
+                        }
+                    )
+                    if (vinMessage != null) {
+                        Text(vinMessage!!, fontSize = 12.sp, color = if (vinMessage!!.startsWith("Found")) Color(0xFF34C759) else Color(0xFFFF9500))
+                    }
+                }
+
+                // Pickup
+                DetailSection {
+                    Text("Pickup Location", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF34C759))
+                    EditField("Address", pickupAddress) { pickupAddress = it }
+                    EditField("City", pickupCity) { pickupCity = it }
+                    EditField("State", pickupState) { pickupState = it }
+                    EditField("Zip", pickupZip) { pickupZip = it }
+                }
+
+                // Dropoff
+                DetailSection {
+                    Text("Drop-off Location", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFFF3B30))
+                    EditField("Address", dropoffAddress) { dropoffAddress = it }
+                    EditField("City", dropoffCity) { dropoffCity = it }
+                    EditField("State", dropoffState) { dropoffState = it }
+                    EditField("Zip", dropoffZip) { dropoffZip = it }
+                }
+
+                // Driver assignment
+                DetailSection {
+                    Text("Assign Driver", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (drivers.isEmpty()) {
+                        Text("No drivers available", color = Color.Gray, fontSize = 13.sp)
+                    } else {
+                        drivers.forEach { driver ->
+                            val did = driver.optInt("id").toString()
+                            val dName = "${driver.optString("first_name", "")} ${driver.optString("last_name", "")}".trim()
+                            Row(modifier = Modifier.fillMaxWidth().clickable { selectedDriverId = if (selectedDriverId == did) "" else did }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (selectedDriverId == did) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(dName, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Truck assignment
+                DetailSection {
+                    Text("Assign Truck", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (trucks.isEmpty()) {
+                        Text("No trucks available", color = Color.Gray, fontSize = 13.sp)
+                    } else {
+                        trucks.forEach { truck ->
+                            val tid = truck.optInt("id").toString()
+                            val unitNum = truck.optString("unit_number", "")
+                            val tYear = truck.optString("year", "").let { if (it == "0" || it == "null") "" else it }
+                            val tMake = truck.optString("make", "")
+                            val tModel = truck.optString("model", "")
+                            val truckLabel = buildString {
+                                append(unitNum)
+                                val ymm = listOf(tYear, tMake, tModel).filter { it.isNotEmpty() }
+                                if (ymm.isNotEmpty()) { append(" - "); append(ymm.joinToString(" ")) }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth().clickable { selectedTruckId = if (selectedTruckId == tid) "" else tid }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (selectedTruckId == tid) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(truckLabel, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Notes & Rates
+                DetailSection {
+                    Text("Details", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    EditField("Dispatch Notes", dispatchNotes) { dispatchNotes = it }
+                    EditField("Reason for Tow", reasonForTow) { reasonForTow = it }
+                    EditField("Base Rate", baseRate) { baseRate = it }
+                    EditField("Mileage Rate", mileageRate) { mileageRate = it }
+                }
+
+                // Submit
+                Button(
+                    onClick = {
+                        if (isSaving) return@Button
+                        isSaving = true; saveMsg = null
+                        Thread {
+                            val body = org.json.JSONObject()
+                            body.put("call_type", callType)
+                            body.put("priority", priority)
+                            if (callerName.isNotEmpty()) body.put("caller_name", callerName)
+                            if (callerPhone.isNotEmpty()) body.put("caller_phone", callerPhone)
+                            if (vehicleYear.isNotEmpty()) body.put("vehicle_year", vehicleYear)
+                            if (vehicleMake.isNotEmpty()) body.put("vehicle_make", vehicleMake)
+                            if (vehicleModel.isNotEmpty()) body.put("vehicle_model", vehicleModel)
+                            if (vehicleColor.isNotEmpty()) body.put("vehicle_color", vehicleColor)
+                            if (vehicleLicense.isNotEmpty()) body.put("vehicle_license", vehicleLicense)
+                            if (vehicleVin.isNotEmpty()) body.put("vehicle_vin", vehicleVin)
+                            if (pickupAddress.isNotEmpty()) body.put("pickup_address", pickupAddress)
+                            if (pickupCity.isNotEmpty()) body.put("pickup_city", pickupCity)
+                            if (pickupState.isNotEmpty()) body.put("pickup_state", pickupState)
+                            if (pickupZip.isNotEmpty()) body.put("pickup_zip", pickupZip)
+                            if (dropoffAddress.isNotEmpty()) body.put("dropoff_address", dropoffAddress)
+                            if (dropoffCity.isNotEmpty()) body.put("dropoff_city", dropoffCity)
+                            if (dropoffState.isNotEmpty()) body.put("dropoff_state", dropoffState)
+                            if (dropoffZip.isNotEmpty()) body.put("dropoff_zip", dropoffZip)
+                            if (selectedDriverId.isNotEmpty()) body.put("assigned_driver_id", selectedDriverId.toInt())
+                            if (selectedTruckId.isNotEmpty()) body.put("assigned_truck_id", selectedTruckId.toInt())
+                            if (dispatchNotes.isNotEmpty()) body.put("dispatch_notes", dispatchNotes)
+                            if (reasonForTow.isNotEmpty()) body.put("reason_for_tow", reasonForTow)
+                            if (baseRate.isNotEmpty()) body.put("base_rate", baseRate.toDoubleOrNull() ?: 0.0)
+                            if (mileageRate.isNotEmpty()) body.put("mileage_rate", mileageRate.toDoubleOrNull() ?: 0.0)
+                            val (code, respText) = apiPost("calls.php?action=create", body)
+                            handler.post {
+                                isSaving = false
+                                if (code in 200..299) {
+                                    val newCallId = try {
+                                        org.json.JSONObject(respText).optInt("call_id", 0).let { if (it > 0) it else null }
+                                    } catch (_: Exception) { null }
+                                    onCreated(newCallId)
+                                } else {
+                                    saveMsg = "Failed to create call (HTTP $code)"
+                                }
+                            }
+                        }.start()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSaving,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
+                ) {
+                    Text(if (isSaving) "Creating..." else "Create Call", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+                if (saveMsg != null) Text(saveMsg!!, color = Color.Red, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(40.dp))
+            }
         }
     }
 }
