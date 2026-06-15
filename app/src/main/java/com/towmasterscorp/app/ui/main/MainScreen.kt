@@ -155,6 +155,13 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
         }.start()
     }
 
+    // Auto-load on first render using Handler
+    var hasLoaded by remember { mutableStateOf(false) }
+    if (!hasLoaded) {
+        hasLoaded = true
+        handler.postDelayed({ loadCalls() }, 100)
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -165,17 +172,17 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Button(
+            TextButton(
                 onClick = { loadCalls() },
                 enabled = !isLoading
             ) {
-                Text(if (isLoading) "Loading..." else "Load")
+                Text(if (isLoading) "Loading..." else "Refresh")
             }
         }
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text("Loading calls...", color = Color.Gray)
+                CircularProgressIndicator()
             }
         } else if (error != null) {
             Text(text = "Error: $error", color = Color.Red, modifier = Modifier.padding(16.dp))
