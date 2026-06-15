@@ -156,6 +156,7 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
     }
 
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(500)
         loadCalls()
     }
 

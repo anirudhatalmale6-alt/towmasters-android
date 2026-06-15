@@ -31,8 +31,12 @@ class TowMastersApp : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             android.util.Log.e("TowMasters", "UNCAUGHT CRASH: ${throwable.javaClass.simpleName}: ${throwable.message}", throwable)
             try {
+                val trace = throwable.stackTraceToString().take(800)
                 getSharedPreferences("crash_flag", Context.MODE_PRIVATE)
-                    .edit().putBoolean("clear_auth", true).commit()
+                    .edit()
+                    .putBoolean("clear_auth", true)
+                    .putString("last_crash", "${throwable.javaClass.simpleName}: ${throwable.message}\n$trace")
+                    .commit()
             } catch (_: Throwable) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }

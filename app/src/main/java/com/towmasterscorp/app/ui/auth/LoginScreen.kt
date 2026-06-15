@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import com.towmasterscorp.app.R
 
@@ -32,6 +33,18 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
+
+    var crashInfo by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("crash_flag", android.content.Context.MODE_PRIVATE)
+        val info = prefs.getString("last_crash", null)
+        if (info != null) {
+            crashInfo = info
+            prefs.edit().remove("last_crash").apply()
+        }
+    }
 
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) {
@@ -51,7 +64,24 @@ fun LoginScreen(
                 .padding(horizontal = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(100.dp))
+            if (crashInfo != null) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "Previous crash report:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Red
+                )
+                Text(
+                    text = crashInfo ?: "",
+                    fontSize = 9.sp,
+                    color = Color.Red,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Spacer(modifier = Modifier.height(if (crashInfo != null) 20.dp else 100.dp))
 
             // Logo
             Image(

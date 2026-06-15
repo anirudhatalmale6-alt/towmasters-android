@@ -72,6 +72,7 @@ fun DashboardScreen(user: User) {
     }
 
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(500)
         loadDashboard()
     }
 
