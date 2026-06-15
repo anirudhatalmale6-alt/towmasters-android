@@ -1617,8 +1617,9 @@ fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: 
 
     val chargeTypeOptions = listOf("service_call", "heavy_duty_call", "medium_duty_call", "light_duty_call", "hook_fee", "hourly_charge", "driveline_remove_reinstall", "heavy_duty_recovery", "medium_duty_recovery", "light_duty_recovery", "other")
 
-    data class EditableCharge(val chargeType: String = "service_call", val rate: String = "", val hours: String = "", val description: String = "")
+    data class EditableCharge(val chargeType: String = "service_call", val rate: String = "", val hours: String = "")
     val editCharges = remember { mutableStateListOf<EditableCharge>() }
+    var initialized by remember { mutableStateOf(false) }
 
     DetailSection {
         Row(
@@ -1634,8 +1635,15 @@ fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: 
                 color = Color(0xFF007AFF),
                 modifier = Modifier.clickable {
                     isExpanded = !isExpanded
-                    if (isExpanded && editCharges.isEmpty()) {
-                        // No pre-population since existingCharges don't carry raw rate/hours
+                    if (isExpanded && !initialized) {
+                        initialized = true
+                        existingCharges.forEach { ch ->
+                            editCharges.add(EditableCharge(
+                                chargeType = ch.type.ifEmpty { "service_call" },
+                                rate = String.format("%.2f", ch.amount),
+                                hours = ""
+                            ))
+                        }
                     }
                 }.padding(4.dp)
             )
@@ -1714,12 +1722,16 @@ fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: 
                             conn.setRequestProperty("Content-Type", "application/json")
                             conn.doOutput = true
                             val body = org.json.JSONObject()
+                            body.put("dispatch_notes", org.json.JSONObject.NULL)
                             val chargesArr = org.json.JSONArray()
                             editCharges.forEach { ch ->
+                                if (ch.rate.isEmpty()) return@forEach
                                 val cObj = org.json.JSONObject()
                                 cObj.put("charge_type", ch.chargeType)
-                                if (ch.rate.isNotEmpty()) cObj.put("rate", ch.rate.toDoubleOrNull() ?: 0.0)
-                                if (ch.hours.isNotEmpty()) cObj.put("hours", ch.hours.toDoubleOrNull() ?: 0.0)
+                                cObj.put("rate", ch.rate.toDoubleOrNull() ?: 0.0)
+                                if (ch.chargeType == "hourly_charge" && ch.hours.isNotEmpty()) {
+                                    cObj.put("hours", ch.hours.toDoubleOrNull() ?: 0.0)
+                                }
                                 chargesArr.put(cObj)
                             }
                             body.put("charges", chargesArr)
@@ -1745,11 +1757,11 @@ fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: 
                     }.start()
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSaving && editCharges.isNotEmpty(),
+                enabled = !isSaving,
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759))
             ) {
-                Text(if (isSaving) "Saving..." else "Save Charges", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(if (isSaving) "Saving..." else if (editCharges.isEmpty()) "Delete All Charges" else "Save Charges", color = Color.White, fontWeight = FontWeight.Bold)
             }
 
             if (saveMsg != null) {
@@ -3712,6 +3724,8 @@ $markers
                 Text("No active drivers found", color = Color.Gray, fontSize = 16.sp)
             }
         } else {
+            val webViewRef = remember { arrayOfNulls<android.webkit.WebView>(1) }
+
             if (mapHtml.isNotEmpty()) {
                 val currentHtml = mapHtml
                 androidx.compose.ui.viewinterop.AndroidView(
@@ -3720,10 +3734,8 @@ $markers
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             loadDataWithBaseURL(null, currentHtml, "text/html", "UTF-8", null)
+                            webViewRef[0] = this
                         }
-                    },
-                    update = { webView ->
-                        webView.loadDataWithBaseURL(null, currentHtml, "text/html", "UTF-8", null)
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f)
                 )
@@ -3743,12 +3755,10 @@ $markers
                         horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         if (hasCoords) {
-                            Text("Navigate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
-                                modifier = Modifier.background(Color(0xFF34C759), RoundedCornerShape(6.dp))
+                            Text("Locate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                                modifier = Modifier.background(Color(0xFF007AFF), RoundedCornerShape(6.dp))
                                     .clickable {
-                                        val uri = android.net.Uri.parse("geo:$lat,$lng?q=$lat,$lng(${java.net.URLEncoder.encode(name, "UTF-8")})")
-                                        val intent = Intent(Intent.ACTION_VIEW, uri)
-                                        try { context.startActivity(intent) } catch (_: Exception) {}
+                                        webViewRef[0]?.evaluateJavascript("map.setView([$lat,$lng],15);L.popup().setLatLng([$lat,$lng]).setContent('${name.replace("'","\\'")}').openOn(map);", null)
                                     }
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
