@@ -1651,33 +1651,18 @@ fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: 
                                 modifier = Modifier.clickable { editCharges.removeAt(idx) }.padding(4.dp))
                         }
                         Text("Type", fontSize = 11.sp, color = Color(0xFF8E8E93))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                            chargeTypeOptions.take(6).forEach { ct ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            chargeTypeOptions.forEach { ct ->
                                 val sel = charge.chargeType == ct
                                 Text(
                                     formatDisplayName(ct),
-                                    fontSize = 9.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
                                     color = if (sel) Color.White else Color(0xFF007AFF),
-                                    modifier = Modifier
-                                        .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                    modifier = Modifier.fillMaxWidth()
+                                        .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(6.dp))
                                         .clickable { editCharges[idx] = charge.copy(chargeType = ct) }
-                                        .padding(horizontal = 5.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                            chargeTypeOptions.drop(6).forEach { ct ->
-                                val sel = charge.chargeType == ct
-                                Text(
-                                    formatDisplayName(ct),
-                                    fontSize = 9.sp,
-                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (sel) Color.White else Color(0xFF007AFF),
-                                    modifier = Modifier
-                                        .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                                        .clickable { editCharges[idx] = charge.copy(chargeType = ct) }
-                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
                                 )
                             }
                         }
@@ -3482,17 +3467,14 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                             }
                             Text("Type", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                chargeTypeOptions.chunked(3).forEach { row ->
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        row.forEach { ct ->
-                                            val sel = charge.chargeType == ct
-                                            val displayLabel = formatDisplayName(ct)
-                                            Text(displayLabel, fontSize = 10.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (sel) Color.White else Color(0xFF007AFF),
-                                                modifier = Modifier.background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                                                    .clickable { additionalCharges[idx] = charge.copy(chargeType = ct) }.padding(horizontal = 6.dp, vertical = 3.dp))
-                                        }
-                                    }
+                                chargeTypeOptions.forEach { ct ->
+                                    val sel = charge.chargeType == ct
+                                    Text(formatDisplayName(ct), fontSize = 13.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (sel) Color.White else Color(0xFF007AFF),
+                                        modifier = Modifier.fillMaxWidth()
+                                            .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.05f), RoundedCornerShape(6.dp))
+                                            .clickable { additionalCharges[idx] = charge.copy(chargeType = ct) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp))
                                 }
                             }
                             EditField("Rate", charge.rate) { additionalCharges[idx] = charge.copy(rate = it) }
