@@ -88,7 +88,7 @@ fun MainScreen(
 @Composable
 fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Boolean = false) {
     var calls by remember { mutableStateOf<List<Call>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
@@ -155,10 +155,63 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
         }.start()
     }
 
-    // Auto-load on first render - use AtomicBoolean to avoid Compose state change during composition
-    val autoLoaded = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
-    if (autoLoaded.compareAndSet(false, true)) {
-        handler.postDelayed({ loadCalls() }, 500)
+    // Auto-load: start fetch thread inside remember (no state change during composition)
+    remember {
+        val ep = if (activeOnly) "calls.php?action=active" else "calls.php?action=list"
+        Thread {
+            try {
+                val url = java.net.URL("https://app.towmasterscorp.com/api/$ep")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("calls") ?: org.json.JSONArray()
+                    val parsed = mutableListOf<Call>()
+                    for (i in 0 until arr.length()) {
+                        val c = arr.getJSONObject(i)
+                        val call = Call(
+                            id = c.optInt("id"),
+                            callNumber = c.optString("call_number", ""),
+                            status = c.optString("status", "pending"),
+                            priority = c.optString("priority", "normal"),
+                            callType = c.optString("call_type", "tow"),
+                            assignedDriverId = if (c.isNull("assigned_driver_id")) null else c.optInt("assigned_driver_id"),
+                            driverName = c.optString("driver_name", null),
+                            truckNumber = c.optString("truck_number", null),
+                            customerName = c.optString("customer_name", null),
+                            callerName = c.optString("caller_name", null),
+                            vehicleMake = c.optString("vehicle_make", null),
+                            vehicleModel = c.optString("vehicle_model", null),
+                            pickupAddress = c.optString("pickup_address", null),
+                            pickupCity = c.optString("pickup_city", null),
+                            pickupState = c.optString("pickup_state", null),
+                            dropoffAddress = c.optString("dropoff_address", null),
+                            createdAt = c.optString("created_at", null)
+                        )
+                        if (driverOnly && call.assignedDriverId != user.id) continue
+                        parsed.add(call)
+                    }
+                    handler.post {
+                        calls = parsed
+                        isLoading = false
+                    }
+                } else {
+                    handler.post { isLoading = false }
+                }
+            } catch (e: Throwable) {
+                Log.e("CallsScreen", "Auto-load failed", e)
+                handler.post {
+                    error = e.message
+                    isLoading = false
+                }
+            }
+        }.start()
+        true
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
