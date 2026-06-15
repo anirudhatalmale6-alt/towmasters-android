@@ -118,7 +118,7 @@ fun MoreMenuScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
-                                text = "${user.firstName.first()}${user.lastName.first()}",
+                                text = "${user.firstName.firstOrNull() ?: ""}${user.lastName.firstOrNull() ?: ""}",
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Primary
@@ -169,7 +169,7 @@ fun MoreMenuScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            if (isClockedIn) Icons.Default.PunchClock else Icons.Default.AccessTime,
+                            if (isClockedIn) Icons.Default.CheckCircle else Icons.Default.AccessTime,
                             contentDescription = null,
                             tint = if (isClockedIn) Success else MaterialTheme.colorScheme.onSurfaceVariant
                         )

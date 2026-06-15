@@ -126,32 +126,15 @@ fun AppContent(authPreferences: AuthPreferences) {
     }
 
     if (isAuthenticated && currentUser != null) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Login Successful!",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Welcome ${currentUser!!.firstName} ${currentUser!!.lastName}",
-                fontSize = 18.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Role: ${currentUser!!.role}", fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = {
+        MainScreen(
+            user = currentUser!!,
+            authPreferences = authPreferences,
+            onLogout = {
                 ApiClient.token = null
                 currentUser = null
                 isAuthenticated = false
-            }) {
-                Text("Logout")
             }
-        }
+        )
     } else {
         val loginViewModel = remember {
             LoginViewModel(authPreferences)

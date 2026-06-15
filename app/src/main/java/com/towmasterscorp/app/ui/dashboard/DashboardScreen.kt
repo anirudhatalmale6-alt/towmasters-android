@@ -159,7 +159,7 @@ fun DashboardScreen(user: User) {
                         modifier = Modifier.weight(1f),
                         title = "Online",
                         value = "${uiState.stats?.driversOnline ?: 0}",
-                        icon = Icons.Default.PersonPin,
+                        icon = Icons.Default.Person,
                         color = Success
                     )
                     StatCard(
