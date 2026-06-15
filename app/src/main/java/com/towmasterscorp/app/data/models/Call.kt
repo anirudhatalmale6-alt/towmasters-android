@@ -2,6 +2,35 @@ package com.towmasterscorp.app.data.models
 
 import com.google.gson.annotations.SerializedName
 
+data class CallAddress(
+    val id: Int = 0,
+    val label: String? = null,
+    val address: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val zip: String? = null
+) {
+    val fullAddress: String
+        get() {
+            val parts = listOfNotNull(
+                address?.ifEmpty { null },
+                city?.ifEmpty { null },
+                state?.ifEmpty { null },
+                zip?.ifEmpty { null }
+            )
+            return if (parts.isNotEmpty()) parts.joinToString(", ") else ""
+        }
+
+    val cityStateZip: String?
+        get() {
+            val parts = listOfNotNull(city?.ifEmpty { null }, state?.ifEmpty { null })
+            var result = parts.joinToString(", ")
+            val z = zip?.ifEmpty { null }
+            if (z != null) result += if (result.isEmpty()) z else " $z"
+            return result.ifEmpty { null }
+        }
+}
+
 data class Call(
     @SerializedName("id") val id: Int = 0,
     @SerializedName("call_number") val callNumber: String? = null,
@@ -62,20 +91,34 @@ data class Call(
     @SerializedName("hooked_at") val hookedAt: String? = null,
     @SerializedName("delivered_at") val deliveredAt: String? = null,
     @SerializedName("completed_at") val completedAt: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerializedName("created_at") val createdAt: String? = null,
+    val addresses: List<CallAddress> = emptyList()
 ) {
+    private fun safeString(value: String?): String? {
+        if (value == null) return null
+        val trimmed = value.trim()
+        return if (trimmed.isEmpty() || trimmed == "null" || trimmed == "0") null else trimmed
+    }
+
     val vehicleDescription: String
         get() {
             val year = when (vehicleYear) {
                 is Number -> if (vehicleYear.toInt() > 0) vehicleYear.toString() else null
-                is String -> if (vehicleYear.isNotEmpty() && vehicleYear != "0") vehicleYear else null
+                is String -> if (vehicleYear.isNotEmpty() && vehicleYear != "0" && vehicleYear != "null") vehicleYear else null
                 else -> null
             }
-            val parts = listOfNotNull(year, vehicleMake?.ifEmpty { null }, vehicleModel?.ifEmpty { null })
+            val parts = listOfNotNull(year, safeString(vehicleMake), safeString(vehicleModel))
             return if (parts.isNotEmpty()) parts.joinToString(" ") else ""
         }
 
-    val vehiclePlate: String? get() = vehicleLicense?.ifEmpty { null }
+    val vehicleColorSafe: String? get() = safeString(vehicleColor)
+    val vehicleLicenseSafe: String? get() = safeString(vehicleLicense)
+    val vehicleVinSafe: String? get() = safeString(vehicleVin)
+    val plateStateSafe: String? get() = safeString(plateState)
+    val dispatchNotesSafe: String? get() = safeString(dispatchNotes)
+    val driverNotesSafe: String? get() = safeString(driverNotes)
+
+    val vehiclePlate: String? get() = vehicleLicenseSafe
 
     val fullPickupAddress: String
         get() {

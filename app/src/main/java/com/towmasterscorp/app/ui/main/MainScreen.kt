@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,15 +14,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.towmasterscorp.app.MainActivity
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.Call
+import com.towmasterscorp.app.data.models.CallAddress
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import com.towmasterscorp.app.ui.dashboard.DashboardScreen
@@ -61,6 +64,19 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     var selectedCallId by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(Unit) {
+        val pending = MainActivity.consumePendingCallId()
+        if (pending != null) selectedCallId = pending
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            val pending = MainActivity.consumePendingCallId()
+            if (pending != null) selectedCallId = pending
+        }
+    }
 
     LaunchedEffect(Unit) {
         try {
@@ -352,12 +368,13 @@ fun StatusBadge(status: String) {
 
 @Composable
 fun CallCard(call: Call, onClick: () -> Unit) {
+    val statusColor = getStatusColor(call.status)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.08f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -377,13 +394,12 @@ fun CallCard(call: Call, onClick: () -> Unit) {
                 StatusBadge(call.status)
             }
 
-            if (call.vehicleDescription.isNotEmpty()) {
-                Text(
-                    text = call.vehicleDescription,
-                    fontSize = 14.sp,
-                    color = Color(0xFF333333)
-                )
-            }
+            val vehDesc = call.vehicleDescription
+            Text(
+                text = if (vehDesc.isNotEmpty()) vehDesc else "No vehicle specified",
+                fontSize = 14.sp,
+                color = if (vehDesc.isNotEmpty()) Color(0xFF333333) else Color(0xFFAEAEB2)
+            )
 
             Text(
                 text = call.pickupAddress ?: "No address",
@@ -457,6 +473,23 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 val json = org.json.JSONObject(responseText)
                 if (json.optBoolean("success")) {
                     val c = json.getJSONObject("call")
+
+                    val addressesList = mutableListOf<CallAddress>()
+                    val addrsArr = c.optJSONArray("addresses")
+                    if (addrsArr != null) {
+                        for (j in 0 until addrsArr.length()) {
+                            val a = addrsArr.getJSONObject(j)
+                            addressesList.add(CallAddress(
+                                id = a.optInt("id"),
+                                label = a.optString("label", null),
+                                address = a.optString("address", null),
+                                city = a.optString("city", null),
+                                state = a.optString("state", null),
+                                zip = a.optString("zip", null)
+                            ))
+                        }
+                    }
+
                     val parsed = Call(
                         id = c.optInt("id"),
                         callNumber = c.optString("call_number", ""),
@@ -504,17 +537,25 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         hookedAt = c.optString("hooked_at", null),
                         deliveredAt = c.optString("delivered_at", null),
                         completedAt = c.optString("completed_at", null),
-                        createdAt = c.optString("created_at", null)
+                        createdAt = c.optString("created_at", null),
+                        addresses = addressesList
                     )
                     val chargesList = mutableListOf<ChargeItem>()
                     val chargesArr = c.optJSONArray("charges")
                     if (chargesArr != null) {
                         for (j in 0 until chargesArr.length()) {
                             val ch = chargesArr.getJSONObject(j)
+                            val desc = ch.optString("description", null)
+                            val chargeType = ch.optString("charge_type", "Charge")
+                            val displayName = if (!desc.isNullOrEmpty() && desc != "null") desc else chargeType
+                            val hours = ch.optDouble("hours", 0.0)
+                            val rate = ch.optDouble("rate", 0.0)
+                            val total = ch.optDouble("total", 0.0)
+                            val displayDetail = if (hours > 0) "$displayName (${String.format("%.1f", hours)}h x $${String.format("%.2f", rate)})" else displayName
                             chargesList.add(ChargeItem(
-                                description = ch.optString("description", "Charge"),
-                                amount = ch.optDouble("amount", 0.0),
-                                type = ch.optString("charge_type", "")
+                                description = displayDetail,
+                                amount = total,
+                                type = chargeType
                             ))
                         }
                     }
@@ -685,7 +726,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         }
                         StatusBadge(c.status)
                     }
-                    if (!c.reasonForTow.isNullOrEmpty()) {
+                    if (!c.reasonForTow.isNullOrEmpty() && c.reasonForTow != "null") {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Reason: ${c.reasonForTow}", fontSize = 13.sp, color = Color(0xFF8E8E93))
                     }
@@ -759,17 +800,20 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 }
 
                 // Vehicle Section
-                if (c.vehicleDescription.isNotEmpty() || !c.vehicleLicense.isNullOrEmpty()) {
-                    DetailSection {
-                        Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        if (c.vehicleDescription.isNotEmpty()) DetailRow("Vehicle", c.vehicleDescription)
-                        if (!c.vehicleColor.isNullOrEmpty()) DetailRow("Color", c.vehicleColor!!)
-                        if (!c.vehicleLicense.isNullOrEmpty()) {
-                            DetailRow("Plate", "${c.vehicleLicense} ${c.plateState ?: ""}".trim())
-                        }
-                        if (!c.vehicleVin.isNullOrEmpty()) DetailRow("VIN", c.vehicleVin!!)
+                val hasVehicle = c.vehicleDescription.isNotEmpty() || c.vehicleLicenseSafe != null || c.vehicleVinSafe != null || c.vehicleColorSafe != null
+                DetailSection {
+                    Text("Vehicle", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (c.vehicleDescription.isNotEmpty()) {
+                        DetailRow("Vehicle", c.vehicleDescription)
+                    } else {
+                        DetailRow("Vehicle", "No vehicle specified")
                     }
+                    if (c.vehicleColorSafe != null) DetailRow("Color", c.vehicleColorSafe!!)
+                    if (c.vehicleLicenseSafe != null) {
+                        DetailRow("Plate", "${c.vehicleLicenseSafe} ${c.plateStateSafe ?: ""}".trim())
+                    }
+                    if (c.vehicleVinSafe != null) DetailRow("VIN", c.vehicleVinSafe!!)
                 }
 
                 // People Section
@@ -778,24 +822,44 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                     DetailSection {
                         Text("People", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.height(6.dp))
-                        if (!c.callerName.isNullOrEmpty()) {
+                        if (!c.callerName.isNullOrEmpty() && c.callerName != "null") {
                             DetailRow("Caller", c.callerName!!)
-                            if (!c.callerPhone.isNullOrEmpty()) DetailRow("Phone", c.callerPhone!!)
+                            if (!c.callerPhone.isNullOrEmpty() && c.callerPhone != "null") DetailRow("Phone", c.callerPhone!!)
                         }
-                        if (!c.contactName.isNullOrEmpty()) {
+                        if (!c.contactName.isNullOrEmpty() && c.contactName != "null") {
                             DetailRow("Contact", c.contactName!!)
-                            if (!c.contactPhone.isNullOrEmpty()) DetailRow("Phone", c.contactPhone!!)
+                            if (!c.contactPhone.isNullOrEmpty() && c.contactPhone != "null") DetailRow("Phone", c.contactPhone!!)
                         }
-                        if (!c.customerName.isNullOrEmpty()) DetailRow("Account", c.customerName!!)
+                        if (!c.customerName.isNullOrEmpty() && c.customerName != "null") DetailRow("Account", c.customerName!!)
                     }
                 }
 
-                // Locations Section
+                // Locations Section with additional addresses
                 DetailSection {
                     Text("Locations", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(6.dp))
                     Text("PICKUP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34C759))
                     Text(c.fullPickupAddress, fontSize = 14.sp)
+
+                    if (c.addresses.isNotEmpty()) {
+                        c.addresses.forEach { addr ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                (addr.label ?: "Stop").uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF9500)
+                            )
+                            if (!addr.address.isNullOrEmpty()) {
+                                Text(addr.address, fontSize = 14.sp)
+                            }
+                            val csz = addr.cityStateZip
+                            if (csz != null) {
+                                Text(csz, fontSize = 12.sp, color = Color(0xFF8E8E93))
+                            }
+                        }
+                    }
+
                     if (c.fullDropoffAddress.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("DROP-OFF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF3B30))
@@ -848,7 +912,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                         if (amountPaid > 0) {
                             DetailRow("Amount Paid", "$${String.format("%.2f", amountPaid)}")
                         }
-                        if (!c.paymentStatus.isNullOrEmpty()) {
+                        if (!c.paymentStatus.isNullOrEmpty() && c.paymentStatus != "null") {
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -868,7 +932,7 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                                         .background(psColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
-                                if (!c.paymentMethod.isNullOrEmpty()) {
+                                if (!c.paymentMethod.isNullOrEmpty() && c.paymentMethod != "null") {
                                     Text(c.paymentMethod!!, fontSize = 12.sp, color = Color(0xFF8E8E93))
                                 }
                             }
@@ -877,25 +941,25 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                 }
 
                 // Notes Section
-                val hasNotes = !c.dispatchNotes.isNullOrEmpty() || !c.driverNotes.isNullOrEmpty()
+                val hasNotes = c.dispatchNotesSafe != null || c.driverNotesSafe != null
                 if (hasNotes) {
                     DetailSection {
                         Text("Notes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.height(6.dp))
-                        if (!c.dispatchNotes.isNullOrEmpty()) {
+                        if (c.dispatchNotesSafe != null) {
                             Text("Dispatch Notes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
-                            Text(c.dispatchNotes!!, fontSize = 14.sp)
+                            Text(c.dispatchNotesSafe!!, fontSize = 14.sp)
                         }
-                        if (!c.driverNotes.isNullOrEmpty()) {
-                            if (!c.dispatchNotes.isNullOrEmpty()) Spacer(modifier = Modifier.height(6.dp))
+                        if (c.driverNotesSafe != null) {
+                            if (c.dispatchNotesSafe != null) Spacer(modifier = Modifier.height(6.dp))
                             Text("Driver Notes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9500))
-                            Text(c.driverNotes!!, fontSize = 14.sp)
+                            Text(c.driverNotesSafe!!, fontSize = 14.sp)
                         }
                     }
                 }
 
                 // PO Number
-                if (!c.poNumber.isNullOrEmpty()) {
+                if (!c.poNumber.isNullOrEmpty() && c.poNumber != "null") {
                     DetailSection {
                         DetailRow("PO Number", c.poNumber!!)
                     }
@@ -910,12 +974,12 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
 @Composable
 fun EditCallSection(call: Call, callId: Int, onSaved: () -> Unit) {
     var vehicleYear by remember { mutableStateOf(call.vehicleYear?.toString()?.takeIf { it != "0" && it != "null" } ?: "") }
-    var vehicleMake by remember { mutableStateOf(call.vehicleMake ?: "") }
-    var vehicleModel by remember { mutableStateOf(call.vehicleModel ?: "") }
-    var vehicleColor by remember { mutableStateOf(call.vehicleColor ?: "") }
-    var vehicleLicense by remember { mutableStateOf(call.vehicleLicense ?: "") }
-    var plateState by remember { mutableStateOf(call.plateState ?: "") }
-    var vehicleVin by remember { mutableStateOf(call.vehicleVin ?: "") }
+    var vehicleMake by remember { mutableStateOf(call.vehicleMake?.takeIf { it != "null" } ?: "") }
+    var vehicleModel by remember { mutableStateOf(call.vehicleModel?.takeIf { it != "null" } ?: "") }
+    var vehicleColor by remember { mutableStateOf(call.vehicleColor?.takeIf { it != "null" } ?: "") }
+    var vehicleLicense by remember { mutableStateOf(call.vehicleLicense?.takeIf { it != "null" } ?: "") }
+    var plateState by remember { mutableStateOf(call.plateState?.takeIf { it != "null" } ?: "") }
+    var vehicleVin by remember { mutableStateOf(call.vehicleVin?.takeIf { it != "null" } ?: "") }
     var pickupAddress by remember { mutableStateOf(call.pickupAddress ?: "") }
     var pickupCity by remember { mutableStateOf(call.pickupCity ?: "") }
     var pickupState by remember { mutableStateOf(call.pickupState ?: "") }
@@ -924,13 +988,67 @@ fun EditCallSection(call: Call, callId: Int, onSaved: () -> Unit) {
     var dropoffCity by remember { mutableStateOf(call.dropoffCity ?: "") }
     var dropoffState by remember { mutableStateOf(call.dropoffState ?: "") }
     var dropoffZip by remember { mutableStateOf(call.dropoffZip ?: "") }
-    var callerName by remember { mutableStateOf(call.callerName ?: "") }
-    var callerPhone by remember { mutableStateOf(call.callerPhone ?: "") }
-    var dispatchNotes by remember { mutableStateOf(call.dispatchNotes ?: "") }
-    var driverNotes by remember { mutableStateOf(call.driverNotes ?: "") }
+    var callerName by remember { mutableStateOf(call.callerName?.takeIf { it != "null" } ?: "") }
+    var callerPhone by remember { mutableStateOf(call.callerPhone?.takeIf { it != "null" } ?: "") }
+    var dispatchNotes by remember { mutableStateOf(call.dispatchNotes?.takeIf { it != "null" } ?: "") }
+    var driverNotes by remember { mutableStateOf(call.driverNotes?.takeIf { it != "null" } ?: "") }
     var isSaving by remember { mutableStateOf(false) }
     var saveMsg by remember { mutableStateOf<String?>(null) }
+    var isDecodingVin by remember { mutableStateOf(false) }
+    var vinMessage by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun decodeVin(vin: String) {
+        if (vin.length != 17) return
+        isDecodingVin = true
+        vinMessage = null
+        Thread {
+            try {
+                val url = java.net.URL("https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/$vin?format=json")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                val results = json.optJSONArray("Results")
+                var year = ""
+                var make = ""
+                var model = ""
+                if (results != null) {
+                    for (i in 0 until results.length()) {
+                        val r = results.getJSONObject(i)
+                        val variable = r.optString("Variable", "")
+                        val value = r.optString("Value", "")
+                        if (value.isNotEmpty() && value != "null") {
+                            when (variable) {
+                                "Model Year" -> year = value
+                                "Make" -> make = value
+                                "Model" -> model = value
+                            }
+                        }
+                    }
+                }
+                handler.post {
+                    isDecodingVin = false
+                    if (year.isNotEmpty() || make.isNotEmpty() || model.isNotEmpty()) {
+                        if (year.isNotEmpty()) vehicleYear = year
+                        if (make.isNotEmpty()) vehicleMake = make
+                        if (model.isNotEmpty()) vehicleModel = model
+                        val found = listOf(year, make, model).filter { it.isNotEmpty() }.joinToString(" ")
+                        vinMessage = "Found: $found"
+                    } else {
+                        vinMessage = "No vehicle data found for this VIN"
+                    }
+                }
+            } catch (e: Exception) {
+                handler.post {
+                    isDecodingVin = false
+                    vinMessage = "VIN decode failed"
+                }
+            }
+        }.start()
+    }
 
     DetailSection {
         Text("Edit Call Details", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF007AFF))
@@ -943,7 +1061,46 @@ fun EditCallSection(call: Call, callId: Int, onSaved: () -> Unit) {
         EditField("Color", vehicleColor) { vehicleColor = it }
         EditField("License Plate", vehicleLicense) { vehicleLicense = it }
         EditField("Plate State", plateState) { plateState = it }
-        EditField("VIN", vehicleVin) { vehicleVin = it }
+
+        OutlinedTextField(
+            value = vehicleVin,
+            onValueChange = { newVal ->
+                vehicleVin = newVal
+                val cleaned = newVal.trim().uppercase()
+                if (cleaned.length == 17) decodeVin(cleaned)
+            },
+            label = { Text("VIN", fontSize = 12.sp) },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            singleLine = true,
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = Color(0xFFD1D1D6),
+                unfocusedContainerColor = Color(0xFFF9F9F9)
+            ),
+            trailingIcon = {
+                if (isDecodingVin) {
+                    Text("...", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                } else if (vehicleVin.trim().length == 17) {
+                    Text(
+                        "Decode",
+                        fontSize = 13.sp,
+                        color = Color(0xFF007AFF),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { decodeVin(vehicleVin.trim().uppercase()) }
+                            .padding(end = 8.dp)
+                    )
+                }
+            }
+        )
+        if (vinMessage != null) {
+            Text(
+                vinMessage!!,
+                fontSize = 12.sp,
+                color = if (vinMessage!!.startsWith("Found")) Color(0xFF34C759) else Color(0xFFFF9500),
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         Text("Pickup", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34C759))
@@ -1094,41 +1251,336 @@ fun DetailRow(label: String, value: String) {
 
 @Composable
 fun SimpleMoreScreen(user: User, onLogout: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(text = "More", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+    var selectedScreen by remember { mutableStateOf<String?>(null) }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = user.fullName, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text(text = user.email, fontSize = 14.sp, color = Color(0xFF8E8E93))
-                Text(
-                    text = user.role.replaceFirstChar { it.uppercase() },
-                    fontSize = 13.sp,
-                    color = Color(0xFFFF9500),
-                    fontWeight = FontWeight.Medium
-                )
+    when (selectedScreen) {
+        "chat" -> PlaceholderScreen("Chat", "Coming soon") { selectedScreen = null }
+        "inspections" -> InspectionsScreen { selectedScreen = null }
+        "fuel" -> FuelReceiptsScreen { selectedScreen = null }
+        else -> {
+            Column(
+                modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(text = "More", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+
+                // User Profile Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF007AFF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Column {
+                            Text(text = user.fullName, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = user.role.replaceFirstChar { it.uppercase() },
+                                fontSize = 13.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                            Text(
+                                text = "Tow Masters Towing",
+                                fontSize = 13.sp,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+                    }
+                }
+
+                // Operations Section
+                Text("Operations", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column {
+                        MoreMenuItem(
+                            icon = Icons.Default.ChatBubble,
+                            label = "Chat",
+                            onClick = { selectedScreen = "chat" }
+                        )
+                        Box(modifier = Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(Color(0xFFD1D1D6)))
+                        MoreMenuItem(
+                            icon = Icons.Default.Checklist,
+                            label = "Inspections",
+                            onClick = { selectedScreen = "inspections" }
+                        )
+                        Box(modifier = Modifier.fillMaxWidth().padding(start = 52.dp).height(0.5.dp).background(Color(0xFFD1D1D6)))
+                        MoreMenuItem(
+                            icon = Icons.Default.LocalGasStation,
+                            label = "Fuel Receipts",
+                            onClick = { selectedScreen = "fuel" }
+                        )
+                    }
+                }
+
+                // Logout
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                ApiClient.token = null
+                                onLogout()
+                            }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ExitToApp,
+                            contentDescription = null,
+                            tint = Color(0xFFFF3B30),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text("Log Out", color = Color(0xFFFF3B30), fontSize = 16.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
+@Composable
+fun MoreMenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = Color(0xFF007AFF),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFFC7C7CC),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
 
-        Button(
-            onClick = {
-                ApiClient.token = null
-                onLogout()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
-            shape = RoundedCornerShape(10.dp)
+@Composable
+fun PlaceholderScreen(title: String, message: String, onBack: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Logout", color = Color.White)
+            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Spacer(modifier = Modifier.weight(1f))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(60.dp))
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(message, color = Color.Gray, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+fun InspectionsScreen(onBack: () -> Unit) {
+    var inspections by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    LaunchedEffect(Unit) {
+        Thread {
+            try {
+                val url = java.net.URL("https://app.towmasterscorp.com/api/inspections.php?action=list")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("inspections") ?: org.json.JSONArray()
+                    val list = mutableListOf<org.json.JSONObject>()
+                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                    handler.post { inspections = list; isLoading = false }
+                } else {
+                    handler.post { isLoading = false }
+                }
+            } catch (e: Exception) {
+                handler.post { isLoading = false }
+            }
+        }.start()
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Spacer(modifier = Modifier.weight(1f))
+            Text("Inspections", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(60.dp))
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray)
+            }
+        } else if (inspections.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No inspections found", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                inspections.forEach { insp ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(insp.optString("truck_number", "Truck"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                val status = insp.optString("status", "pending")
+                                val sColor = if (status == "passed") Color(0xFF34C759) else if (status == "failed") Color(0xFFFF3B30) else Color(0xFFFF9500)
+                                Text(
+                                    status.replaceFirstChar { it.uppercase() },
+                                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = sColor,
+                                    modifier = Modifier.background(sColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                            Text(insp.optString("inspection_type", "").replace("_", " ").replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                            Text(insp.optString("created_at", ""), fontSize = 11.sp, color = Color(0xFFAEAEB2))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun FuelReceiptsScreen(onBack: () -> Unit) {
+    var receipts by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    LaunchedEffect(Unit) {
+        Thread {
+            try {
+                val url = java.net.URL("https://app.towmasterscorp.com/api/fuel.php?action=list")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val responseText = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+                val json = org.json.JSONObject(responseText)
+                if (json.optBoolean("success")) {
+                    val arr = json.optJSONArray("receipts") ?: json.optJSONArray("fuel_receipts") ?: org.json.JSONArray()
+                    val list = mutableListOf<org.json.JSONObject>()
+                    for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                    handler.post { receipts = list; isLoading = false }
+                } else {
+                    handler.post { isLoading = false }
+                }
+            } catch (e: Exception) {
+                handler.post { isLoading = false }
+            }
+        }.start()
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("< Back", color = Color(0xFF007AFF), fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Spacer(modifier = Modifier.weight(1f))
+            Text("Fuel Receipts", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(60.dp))
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFD1D1D6)))
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray)
+            }
+        } else if (receipts.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No fuel receipts found", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                receipts.forEach { receipt ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(receipt.optString("truck_number", receipt.optString("station_name", "Fuel Receipt")), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                val amount = receipt.optDouble("total_cost", receipt.optDouble("amount", 0.0))
+                                Text("$${String.format("%.2f", amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF34C759))
+                            }
+                            val gallons = receipt.optDouble("gallons", 0.0)
+                            if (gallons > 0) Text("${String.format("%.2f", gallons)} gal", fontSize = 13.sp, color = Color(0xFF8E8E93))
+                            val station = receipt.optString("station_name", "")
+                            if (station.isNotEmpty()) Text(station, fontSize = 13.sp, color = Color(0xFF8E8E93))
+                            Text(receipt.optString("fuel_date", receipt.optString("created_at", "")), fontSize = 11.sp, color = Color(0xFFAEAEB2))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }

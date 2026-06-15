@@ -32,6 +32,17 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var authPreferences: AuthPreferences
 
+    companion object {
+        var pendingCallId: Int? = null
+            private set
+
+        fun consumePendingCallId(): Int? {
+            val id = pendingCallId
+            pendingCallId = null
+            return id
+        }
+    }
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -52,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
         authPreferences = (application as TowMastersApp).authPreferences
 
+        handleNotificationIntent(intent)
         requestNotificationPermission()
 
         setContent {
@@ -63,6 +75,18 @@ class MainActivity : ComponentActivity() {
                     AppContent(authPreferences = authPreferences)
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val callId = intent?.getStringExtra("call_id")?.toIntOrNull()
+        if (callId != null) {
+            pendingCallId = callId
         }
     }
 
