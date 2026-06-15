@@ -257,12 +257,13 @@ fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
             }
 
             // Status update button for drivers
-            if (user.isDriver && call.nextDriverStatus != null && !isUpdating) {
+            if (user.isDriver && call.nextDriverStatus != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = {
+                        if (isUpdating) return@Button
                         isUpdating = true
-                        val newStatus = call.nextDriverStatus!!
+                        val newStatus = call.nextDriverStatus ?: return@Button
                         Thread {
                             try {
                                 val url = java.net.URL("https://app.towmasterscorp.com/api/calls.php?action=update&id=${call.id}")
@@ -271,16 +272,16 @@ fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
                                 conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
                                 conn.setRequestProperty("Content-Type", "application/json")
                                 conn.doOutput = true
-                                conn.outputStream.bufferedWriter().use {
-                                    it.write("""{"status":"$newStatus"}""")
-                                }
-                                conn.responseCode
+                                val body = """{"status":"$newStatus"}"""
+                                conn.outputStream.write(body.toByteArray())
+                                val code = conn.responseCode
                                 conn.disconnect()
+                                Log.d("CallCard", "Update response: $code")
                                 handler.post {
                                     isUpdating = false
                                     onStatusUpdated()
                                 }
-                            } catch (e: Exception) {
+                            } catch (e: Throwable) {
                                 Log.e("CallCard", "Update failed", e)
                                 handler.post {
                                     isUpdating = false
@@ -289,15 +290,12 @@ fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
                         }.start()
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !isUpdating,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A237E)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Update to: ${call.nextStatusDisplayName}")
+                    Text(if (isUpdating) "Updating..." else "Update to: ${call.nextStatusDisplayName ?: ""}")
                 }
-            }
-            if (isUpdating) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
     }

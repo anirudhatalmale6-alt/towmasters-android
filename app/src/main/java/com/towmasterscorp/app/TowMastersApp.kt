@@ -18,10 +18,16 @@ class TowMastersApp : Application() {
         super.onCreate()
         instance = this
 
-        // Global crash handler - log instead of instant death
+        // Global crash handler - clear auth to prevent crash loops
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             android.util.Log.e("TowMasters", "UNCAUGHT CRASH: ${throwable.javaClass.simpleName}: ${throwable.message}", throwable)
+            try {
+                // Clear saved auth to prevent crash-loop on reopen
+                kotlinx.coroutines.runBlocking {
+                    authPreferences.clearAll()
+                }
+            } catch (_: Throwable) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
