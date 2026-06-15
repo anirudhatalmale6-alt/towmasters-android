@@ -425,9 +425,9 @@ fun CallCard(call: Call, onClick: () -> Unit) {
     }
 }
 
-@Composable
 data class ChargeItem(val description: String, val amount: Double, val type: String)
 
+@Composable
 fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
     var call by remember { mutableStateOf<Call?>(null) }
     var charges by remember { mutableStateOf<List<ChargeItem>>(emptyList()) }
