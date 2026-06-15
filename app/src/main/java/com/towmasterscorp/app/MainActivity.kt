@@ -125,6 +125,15 @@ fun AppContent(authPreferences: AuthPreferences) {
         }
     }
 
+    val loginViewModel = remember { LoginViewModel(authPreferences) }
+    val loginState by loginViewModel.uiState.collectAsState()
+
+    // React to login success
+    if (loginState.isLoggedIn && loginState.user != null && !isAuthenticated) {
+        currentUser = loginState.user
+        isAuthenticated = true
+    }
+
     if (isAuthenticated && currentUser != null) {
         MainScreen(
             user = currentUser!!,
@@ -136,14 +145,10 @@ fun AppContent(authPreferences: AuthPreferences) {
             }
         )
     } else {
-        val loginViewModel = remember {
-            LoginViewModel(authPreferences)
-        }
         LoginScreen(
             viewModel = loginViewModel,
             onLoginSuccess = {
-                val state = loginViewModel.uiState.value
-                currentUser = state.user
+                currentUser = loginState.user
                 isAuthenticated = true
             }
         )
