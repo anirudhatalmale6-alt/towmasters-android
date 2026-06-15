@@ -8,9 +8,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -123,14 +125,32 @@ fun AppContent(authPreferences: AuthPreferences) {
     }
 
     if (isAuthenticated && currentUser != null) {
-        MainScreen(
-            user = currentUser!!,
-            authPreferences = authPreferences,
-            onLogout = {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Login Successful!",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Welcome ${currentUser!!.firstName} ${currentUser!!.lastName}",
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "Role: ${currentUser!!.role}", fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = {
+                ApiClient.token = null
                 currentUser = null
                 isAuthenticated = false
+            }) {
+                Text("Logout")
             }
-        )
+        }
     } else {
         val loginViewModel = remember {
             LoginViewModel(authPreferences)
