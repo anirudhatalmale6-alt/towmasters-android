@@ -3734,8 +3734,11 @@ $markers
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
                             settings.useWideViewPort = true
+                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            @Suppress("DEPRECATION")
+                            settings.allowUniversalAccessFromFileURLs = true
                             webViewInstance = this
-                            loadDataWithBaseURL("https://app.towmasterscorp.com", mapHtml, "text/html", "UTF-8", null)
+                            loadDataWithBaseURL("https://unpkg.com/", mapHtml, "text/html", "UTF-8", null)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().weight(1f)
