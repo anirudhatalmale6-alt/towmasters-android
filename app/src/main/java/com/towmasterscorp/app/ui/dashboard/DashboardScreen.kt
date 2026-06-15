@@ -12,14 +12,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.User
 
 @Composable
-fun DashboardScreen(user: User) {
+fun DashboardScreen(
+    user: User,
+    onNewCall: () -> Unit = {},
+    onDriverMap: () -> Unit = {},
+    onReports: () -> Unit = {}
+) {
     var todayCalls by remember { mutableStateOf(0) }
     var activeCalls by remember { mutableStateOf(0) }
     var completedToday by remember { mutableStateOf(0) }
@@ -139,6 +147,36 @@ fun DashboardScreen(user: User) {
             }
         }
 
+        // Quick Actions
+        Text("Quick Actions", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                label = "New Call",
+                icon = Icons.Default.Add,
+                color = Color(0xFF007AFF),
+                onClick = onNewCall
+            )
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                label = "Driver Map",
+                icon = Icons.Default.Map,
+                color = Color(0xFF34C759),
+                onClick = onDriverMap
+            )
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                label = "Reports",
+                icon = Icons.Default.BarChart,
+                color = Color(0xFFAF52DE),
+                onClick = onReports
+            )
+        }
+
         Spacer(modifier = Modifier.height(40.dp))
     }
 }
@@ -158,6 +196,31 @@ fun StatCard(modifier: Modifier = Modifier, title: String, value: String, color:
             Text(text = value, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = color)
             Spacer(modifier = Modifier.height(2.dp))
             Text(text = title, fontSize = 12.sp, color = Color(0xFF8E8E93))
+        }
+    }
+}
+
+@Composable
+fun QuickActionButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = color),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+            Text(text = label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
     }
 }

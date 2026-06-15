@@ -35,6 +35,9 @@ import com.towmasterscorp.app.data.models.CallAddress
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.data.preferences.AuthPreferences
 import com.towmasterscorp.app.ui.dashboard.DashboardScreen
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import android.content.Intent
 
 fun getStatusColor(status: String): Color = when (status) {
     "pending" -> Color(0xFFFF9500)
@@ -72,6 +75,8 @@ fun MainScreen(
 ) {
     var selectedCallId by remember { mutableStateOf<Int?>(null) }
     var showCreateCall by remember { mutableStateOf(false) }
+    var showDriverMap by remember { mutableStateOf(false) }
+    var showReports by remember { mutableStateOf(false) }
     // Change #14: track pending nav target for chat notifications
     var navigateToChat by remember { mutableStateOf(false) }
 
@@ -124,6 +129,10 @@ fun MainScreen(
     // Change #14: if navigateToChat, show chat directly
     if (navigateToChat) {
         ChatScreen(user = user) { navigateToChat = false }
+    } else if (showDriverMap) {
+        DriverMapScreen(onBack = { showDriverMap = false })
+    } else if (showReports) {
+        ReportsScreen(onBack = { showReports = false })
     } else if (showCreateCall) {
         CreateCallScreen(user = user, onBack = { showCreateCall = false }, onCreated = { newId ->
             showCreateCall = false
@@ -140,7 +149,9 @@ fun MainScreen(
             user = user,
             onLogout = onLogout,
             onCallClick = { selectedCallId = it },
-            onCreateCall = { showCreateCall = true }
+            onCreateCall = { showCreateCall = true },
+            onDriverMap = { showDriverMap = true },
+            onReports = { showReports = true }
         )
     }
 }
@@ -150,7 +161,9 @@ private fun MainTabContent(
     user: User,
     onLogout: () -> Unit,
     onCallClick: (Int) -> Unit,
-    onCreateCall: () -> Unit
+    onCreateCall: () -> Unit,
+    onDriverMap: () -> Unit = {},
+    onReports: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val isAdmin = user.role == "admin" || user.role == "dispatcher"
@@ -175,7 +188,7 @@ private fun MainTabContent(
         Box(modifier = Modifier.weight(1f).background(Color(0xFFF2F2F7))) {
             if (isAdmin) {
                 when (selectedTab) {
-                    0 -> DashboardScreen(user = user)
+                    0 -> DashboardScreen(user = user, onNewCall = onCreateCall, onDriverMap = onDriverMap, onReports = onReports)
                     1 -> CallsScreen("Dispatch Board", activeOnly = true, user = user, onCallClick = onCallClick, onCreateCall = onCreateCall)
                     2 -> CallsScreen("All Calls", activeOnly = false, user = user, onCallClick = onCallClick)
                     3 -> SimpleMoreScreen(user = user, onLogout = onLogout)
@@ -236,6 +249,9 @@ fun CallsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    var currentPage by remember { mutableIntStateOf(1) }
+    var totalPages by remember { mutableIntStateOf(1) }
+    var isLoadingMore by remember { mutableStateOf(false) }
 
     // Change #1: Clock in/out state for drivers
     var isClockedIn by remember { mutableStateOf(user.isClockedIn != 0) }
@@ -257,12 +273,12 @@ fun CallsScreen(
         }.start()
     }
 
-    fun loadCalls() {
-        isLoading = true
+    fun loadCalls(page: Int = 1, append: Boolean = false) {
+        if (append) isLoadingMore = true else isLoading = true
         error = null
         Thread {
             try {
-                val endpoint = if (activeOnly) "calls.php?action=active" else "calls.php?action=list"
+                val endpoint = if (activeOnly) "calls.php?action=active&page=$page&limit=20" else "calls.php?action=list&page=$page&limit=20"
                 val url = java.net.URL("https://app.towmasterscorp.com/api/$endpoint")
                 val conn = url.openConnection() as java.net.HttpURLConnection
                 conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
@@ -274,6 +290,7 @@ fun CallsScreen(
                 val json = org.json.JSONObject(responseText)
                 if (json.optBoolean("success")) {
                     val callsArray = json.optJSONArray("calls") ?: org.json.JSONArray()
+                    val tp = json.optInt("total_pages", 1)
                     val parsed = mutableListOf<Call>()
                     for (i in 0 until callsArray.length()) {
                         val c = callsArray.getJSONObject(i)
@@ -311,13 +328,31 @@ fun CallsScreen(
                         parsed.add(call)
                     }
                     handler.post {
-                        calls = parsed
+                        if (append) {
+                            val existingIds = calls.map { it.id }.toSet()
+                            calls = calls + parsed.filter { it.id !in existingIds }
+                        } else {
+                            // For page 1 refresh, merge: update existing + prepend new
+                            if (page == 1 && calls.isNotEmpty()) {
+                                val existingMap = calls.associateBy { it.id }.toMutableMap()
+                                parsed.forEach { existingMap[it.id] = it }
+                                val newIds = parsed.map { it.id }.toSet()
+                                val newCalls = parsed.filter { it.id !in calls.map { c -> c.id }.toSet() }
+                                calls = newCalls + calls.map { existingMap[it.id] ?: it }
+                            } else {
+                                calls = parsed
+                            }
+                        }
+                        totalPages = tp
+                        currentPage = page
                         isLoading = false
+                        isLoadingMore = false
                     }
                 } else {
                     handler.post {
                         error = "Failed to load"
                         isLoading = false
+                        isLoadingMore = false
                     }
                 }
             } catch (e: Exception) {
@@ -325,6 +360,7 @@ fun CallsScreen(
                 handler.post {
                     error = e.message
                     isLoading = false
+                    isLoadingMore = false
                 }
             }
         }.start()
@@ -332,13 +368,13 @@ fun CallsScreen(
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(300)
-        loadCalls()
+        loadCalls(page = 1)
     }
 
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(30000)
-            loadCalls()
+            loadCalls(page = 1)
         }
     }
 
@@ -427,6 +463,24 @@ fun CallsScreen(
                         onClick = { onCallClick(call.id) }
                     )
                 }
+
+                if (currentPage < totalPages) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { if (!isLoadingMore) loadCalls(page = currentPage + 1, append = true) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isLoadingMore,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
+                    ) {
+                        Text(
+                            if (isLoadingMore) "Loading..." else "Load More",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -1231,6 +1285,15 @@ fun CallDetailContent(callId: Int, user: User, onBack: () -> Unit) {
                     }
                 }
 
+                // Edit Charges Section
+                if (user.isAdmin || user.isDispatcher) {
+                    EditChargesSection(
+                        callId = callId,
+                        existingCharges = charges,
+                        onSaved = { loadCall() }
+                    )
+                }
+
                 // Notes Section
                 val hasNotes = c.dispatchNotesSafe != null || c.driverNotesSafe != null
                 if (hasNotes) {
@@ -1526,6 +1589,171 @@ fun EditCallSection(call: Call, callId: Int, onSaved: () -> Unit) {
         if (saveMsg != null) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(saveMsg!!, fontSize = 13.sp, color = if (saveMsg!!.startsWith("Saved")) Color(0xFF34C759) else Color.Red)
+        }
+    }
+}
+
+@Composable
+fun EditChargesSection(callId: Int, existingCharges: List<ChargeItem>, onSaved: () -> Unit) {
+    var isExpanded by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    var saveMsg by remember { mutableStateOf<String?>(null) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    val chargeTypeOptions = listOf("service_call", "heavy_duty_call", "medium_duty_call", "light_duty_call", "hook_fee", "hourly_charge", "driveline_remove_reinstall", "heavy_duty_recovery", "medium_duty_recovery", "light_duty_recovery", "other")
+
+    data class EditableCharge(val chargeType: String = "service_call", val rate: String = "", val hours: String = "", val description: String = "")
+    val editCharges = remember { mutableStateListOf<EditableCharge>() }
+
+    DetailSection {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SectionTitle(Icons.Default.Edit, "Edit Charges", Color(0xFFFF9500))
+            Text(
+                text = if (isExpanded) "Close" else "Edit Charges",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF007AFF),
+                modifier = Modifier.clickable {
+                    isExpanded = !isExpanded
+                    if (isExpanded && editCharges.isEmpty()) {
+                        // No pre-population since existingCharges don't carry raw rate/hours
+                    }
+                }.padding(4.dp)
+            )
+        }
+
+        if (isExpanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (editCharges.isEmpty()) {
+                Text("No charges added yet. Tap below to add.", fontSize = 13.sp, color = Color(0xFF8E8E93))
+            }
+
+            editCharges.forEachIndexed { idx, charge ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9)),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Charge ${idx + 1}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Remove", fontSize = 12.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold,
+                                modifier = Modifier.clickable { editCharges.removeAt(idx) }.padding(4.dp))
+                        }
+                        Text("Type", fontSize = 11.sp, color = Color(0xFF8E8E93))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                            chargeTypeOptions.take(6).forEach { ct ->
+                                val sel = charge.chargeType == ct
+                                Text(
+                                    formatDisplayName(ct),
+                                    fontSize = 9.sp,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (sel) Color.White else Color(0xFF007AFF),
+                                    modifier = Modifier
+                                        .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                        .clickable { editCharges[idx] = charge.copy(chargeType = ct) }
+                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                            chargeTypeOptions.drop(6).forEach { ct ->
+                                val sel = charge.chargeType == ct
+                                Text(
+                                    formatDisplayName(ct),
+                                    fontSize = 9.sp,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (sel) Color.White else Color(0xFF007AFF),
+                                    modifier = Modifier
+                                        .background(if (sel) Color(0xFF007AFF) else Color(0xFF007AFF).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                        .clickable { editCharges[idx] = charge.copy(chargeType = ct) }
+                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        EditField("Rate ($)", charge.rate) { editCharges[idx] = charge.copy(rate = it) }
+                        EditField("Hours", charge.hours) { editCharges[idx] = charge.copy(hours = it) }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "+ Add Charge",
+                fontSize = 13.sp,
+                color = Color(0xFF007AFF),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { editCharges.add(EditableCharge()) }.padding(vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    if (isSaving) return@Button
+                    isSaving = true
+                    saveMsg = null
+                    Thread {
+                        try {
+                            val url = java.net.URL("https://app.towmasterscorp.com/api/calls.php?action=update&id=$callId")
+                            val conn = url.openConnection() as java.net.HttpURLConnection
+                            conn.requestMethod = "PUT"
+                            conn.setRequestProperty("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                            conn.setRequestProperty("Content-Type", "application/json")
+                            conn.doOutput = true
+                            val body = org.json.JSONObject()
+                            val chargesArr = org.json.JSONArray()
+                            editCharges.forEach { ch ->
+                                val cObj = org.json.JSONObject()
+                                cObj.put("charge_type", ch.chargeType)
+                                if (ch.rate.isNotEmpty()) cObj.put("rate", ch.rate.toDoubleOrNull() ?: 0.0)
+                                if (ch.hours.isNotEmpty()) cObj.put("hours", ch.hours.toDoubleOrNull() ?: 0.0)
+                                chargesArr.put(cObj)
+                            }
+                            body.put("charges", chargesArr)
+                            conn.outputStream.write(body.toString().toByteArray())
+                            val code = conn.responseCode
+                            conn.disconnect()
+                            handler.post {
+                                isSaving = false
+                                if (code in 200..299) {
+                                    saveMsg = "Charges saved!"
+                                    isExpanded = false
+                                    onSaved()
+                                } else {
+                                    saveMsg = "Save failed (HTTP $code)"
+                                }
+                            }
+                        } catch (e: Exception) {
+                            handler.post {
+                                isSaving = false
+                                saveMsg = "Error: ${e.message}"
+                            }
+                        }
+                    }.start()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSaving && editCharges.isNotEmpty(),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34C759))
+            ) {
+                Text(if (isSaving) "Saving..." else "Save Charges", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+
+            if (saveMsg != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(saveMsg!!, fontSize = 13.sp, color = if (saveMsg!!.contains("saved")) Color(0xFF34C759) else Color.Red)
+            }
         }
     }
 }
@@ -2131,13 +2359,26 @@ fun InspectionDetailScreen(inspection: org.json.JSONObject, onBack: () -> Unit) 
                 DetailSection {
                     SectionTitle(Icons.Default.PhotoCamera, "Photos")
                     Spacer(modifier = Modifier.height(6.dp))
+                    val inspPhotoContext = LocalContext.current
                     positions.forEach { (pos, label) ->
                         val url = inspection.optString("photo_${pos}_url", "")
                         if (url.isNotEmpty() && url != "null") {
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(label, fontSize = 13.sp, color = Color(0xFF8E8E93))
-                                Text("Photo attached", fontSize = 13.sp, color = Color(0xFF34C759))
-                            }
+                            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            AsyncImage(
+                                model = ImageRequest.Builder(inspPhotoContext)
+                                    .data("https://app.towmasterscorp.com${url}")
+                                    .addHeader("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "$label photo",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -2560,7 +2801,21 @@ fun FuelReceiptDetailScreen(receipt: org.json.JSONObject, onBack: () -> Unit) {
                 DetailSection {
                     SectionTitle(Icons.Default.PhotoCamera, "Receipt Photo")
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text("Receipt photo attached", fontSize = 13.sp, color = Color(0xFF34C759))
+                    val fuelPhotoContext = LocalContext.current
+                    val receiptId = receipt.optInt("id", 0)
+                    AsyncImage(
+                        model = ImageRequest.Builder(fuelPhotoContext)
+                            .data("https://app.towmasterscorp.com/api/fuel.php?action=serve-photo&id=$receiptId")
+                            .addHeader("Authorization", "Bearer ${ApiClient.token ?: ""}")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Receipt photo",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
                 }
             }
 
@@ -3364,6 +3619,314 @@ fun CreateCallScreen(user: User, onBack: () -> Unit, onCreated: (Int?) -> Unit) 
                 if (saveMsg != null) Text(saveMsg!!, color = Color.Red, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(40.dp))
             }
+        }
+    }
+}
+
+@Composable
+fun DriverMapScreen(onBack: () -> Unit) {
+    var drivers by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val context = LocalContext.current
+
+    fun loadDriverLocations() {
+        Thread {
+            try {
+                val text = apiGet("driver-location.php?action=all")
+                if (text != null) {
+                    val json = org.json.JSONObject(text)
+                    if (json.optBoolean("success")) {
+                        val arr = json.optJSONArray("drivers") ?: json.optJSONArray("locations") ?: org.json.JSONArray()
+                        val list = mutableListOf<org.json.JSONObject>()
+                        for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
+                        handler.post { drivers = list; isLoading = false; error = null }
+                    } else {
+                        handler.post { isLoading = false; error = "Failed to load" }
+                    }
+                } else {
+                    handler.post { isLoading = false; error = "Network error" }
+                }
+            } catch (e: Exception) {
+                Log.e("DriverMap", "Load failed", e)
+                handler.post { isLoading = false; error = e.message }
+            }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) { loadDriverLocations() }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(15000)
+            loadDriverLocations()
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("Driver Map", onBack) {
+            Text(
+                "Refresh",
+                color = Color(0xFF007AFF),
+                fontSize = 14.sp,
+                modifier = Modifier.clickable { loadDriverLocations() }.padding(8.dp)
+            )
+        }
+
+        if (isLoading && drivers.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else if (error != null && drivers.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Error: $error", color = Color.Red, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Tap to retry", color = Color(0xFF007AFF), modifier = Modifier.clickable { loadDriverLocations() })
+                }
+            }
+        } else if (drivers.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No driver locations found", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("${drivers.size} Driver${if (drivers.size != 1) "s" else ""} Active", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
+                drivers.forEach { driver ->
+                    val name = "${driver.optString("first_name", "")} ${driver.optString("last_name", "")}".trim().ifEmpty { driver.optString("driver_name", "Unknown") }
+                    val lat = driver.optDouble("lat", driver.optDouble("last_lat", 0.0))
+                    val lng = driver.optDouble("lng", driver.optDouble("last_lng", 0.0))
+                    val updatedAt = driver.optString("updated_at", driver.optString("last_location_at", ""))
+                    val hasCoords = lat != 0.0 && lng != 0.0
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF34C759)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                    if (hasCoords) {
+                                        Text("${String.format("%.4f", lat)}, ${String.format("%.4f", lng)}", fontSize = 12.sp, color = Color(0xFF8E8E93))
+                                    }
+                                    if (updatedAt.isNotEmpty() && updatedAt != "null") {
+                                        Text("Updated: ${formatTimestamp(updatedAt)}", fontSize = 11.sp, color = Color(0xFFAEAEB2))
+                                    }
+                                }
+                            }
+                            if (hasCoords) {
+                                Text(
+                                    "Navigate",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .background(Color(0xFF34C759), RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            val encodedName = java.net.URLEncoder.encode(name, "UTF-8")
+                                            val uri = android.net.Uri.parse("geo:$lat,$lng?q=$lat,$lng($encodedName)")
+                                            val intent = Intent(Intent.ACTION_VIEW, uri)
+                                            intent.setPackage("com.google.android.apps.maps")
+                                            try {
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {
+                                                // Fallback without package restriction
+                                                val fallbackIntent = Intent(Intent.ACTION_VIEW, uri)
+                                                context.startActivity(fallbackIntent)
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun ReportsScreen(onBack: () -> Unit) {
+    var todayCalls by remember { mutableStateOf(0) }
+    var activeCalls by remember { mutableStateOf(0) }
+    var completedToday by remember { mutableStateOf(0) }
+    var pendingCalls by remember { mutableStateOf(0) }
+    var todayRevenue by remember { mutableStateOf(0.0) }
+    var driversActive by remember { mutableStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    fun loadReport() {
+        isLoading = true
+        error = null
+        Thread {
+            try {
+                val text = apiGet("reports.php?action=dashboard")
+                if (text != null) {
+                    val json = org.json.JSONObject(text)
+                    if (json.optBoolean("success")) {
+                        val today = json.optJSONObject("today")
+                        val tc = today?.optInt("total_calls", 0) ?: 0
+                        val ac = today?.optString("active", "0")?.toIntOrNull() ?: 0
+                        val ct = today?.optString("completed", "0")?.toIntOrNull() ?: 0
+                        val pc = today?.optString("pending", "0")?.toIntOrNull() ?: 0
+                        val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
+                        val da = json.optInt("drivers_active", 0)
+                        handler.post {
+                            todayCalls = tc; activeCalls = ac; completedToday = ct
+                            pendingCalls = pc; todayRevenue = tr; driversActive = da
+                            isLoading = false
+                        }
+                    } else {
+                        handler.post { error = "Failed to load"; isLoading = false }
+                    }
+                } else {
+                    handler.post { error = "Network error"; isLoading = false }
+                }
+            } catch (e: Exception) {
+                Log.e("Reports", "Load failed", e)
+                handler.post { error = e.message; isLoading = false }
+            }
+        }.start()
+    }
+
+    LaunchedEffect(Unit) { loadReport() }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
+        ScreenHeader("Reports", onBack) {
+            Text(
+                if (isLoading) "Loading..." else "Refresh",
+                color = Color(0xFF007AFF),
+                fontSize = 14.sp,
+                modifier = Modifier.clickable(enabled = !isLoading) { loadReport() }.padding(8.dp)
+            )
+        }
+
+        if (isLoading && todayCalls == 0 && activeCalls == 0) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
+            }
+        } else if (error != null && todayCalls == 0) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Error: $error", color = Color.Red, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Tap to retry", color = Color(0xFF007AFF), modifier = Modifier.clickable { loadReport() })
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Today's Report", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+
+                // Summary Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF34C759)),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Today's Revenue", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text("$${String.format("%.2f", todayRevenue)}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                // Stats Grid
+                Text("Call Statistics", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ReportStatCard(modifier = Modifier.weight(1f), title = "Total Calls", value = "$todayCalls", color = Color(0xFF007AFF), icon = Icons.Default.Phone)
+                    ReportStatCard(modifier = Modifier.weight(1f), title = "Completed", value = "$completedToday", color = Color(0xFF34C759), icon = Icons.Default.CheckCircle)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ReportStatCard(modifier = Modifier.weight(1f), title = "Active", value = "$activeCalls", color = Color(0xFFFF9500), icon = Icons.Default.LocalShipping)
+                    ReportStatCard(modifier = Modifier.weight(1f), title = "Pending", value = "$pendingCalls", color = Color(0xFFFFCC00), icon = Icons.Default.Schedule)
+                }
+
+                // Driver Stats
+                Text("Driver Activity", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(1.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(
+                                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFAF52DE).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFFAF52DE), modifier = Modifier.size(24.dp))
+                            }
+                            Column {
+                                Text("Drivers Active", fontSize = 14.sp, color = Color(0xFF8E8E93))
+                                Text("$driversActive", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFAF52DE))
+                            }
+                        }
+                        Box(
+                            modifier = Modifier.size(10.dp).clip(CircleShape).background(if (driversActive > 0) Color(0xFF34C759) else Color(0xFF8E8E93))
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun ReportStatCard(modifier: Modifier = Modifier, title: String, value: String, color: Color, icon: ImageVector) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(title, fontSize = 12.sp, color = Color(0xFF8E8E93))
         }
     }
 }
