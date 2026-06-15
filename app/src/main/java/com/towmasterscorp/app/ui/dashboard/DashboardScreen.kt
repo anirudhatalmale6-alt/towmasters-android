@@ -1,6 +1,8 @@
 package com.towmasterscorp.app.ui.dashboard
 
 import android.util.Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.towmasterscorp.app.data.api.ApiClient
 import com.towmasterscorp.app.data.models.User
-import com.towmasterscorp.app.ui.theme.*
 
 @Composable
 fun DashboardScreen(user: User) {
@@ -24,6 +25,7 @@ fun DashboardScreen(user: User) {
     var completedToday by remember { mutableStateOf(0) }
     var todayRevenue by remember { mutableStateOf(0.0) }
     var driversOnline by remember { mutableStateOf(0) }
+    var pendingCalls by remember { mutableStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -50,12 +52,14 @@ fun DashboardScreen(user: User) {
                     val ct = today?.optString("completed", "0")?.toIntOrNull() ?: 0
                     val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
                     val dr = json.optInt("drivers_active", 0)
+                    val pc = today?.optString("pending", "0")?.toIntOrNull() ?: 0
                     handler.post {
                         todayCalls = tc
                         activeCalls = ac
                         completedToday = ct
                         todayRevenue = tr
                         driversOnline = dr
+                        pendingCalls = pc
                         isLoading = false
                     }
                 } else {
@@ -72,75 +76,60 @@ fun DashboardScreen(user: User) {
     }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(500)
+        kotlinx.coroutines.delay(300)
         loadDashboard()
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color(0xFFF2F2F7))
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "Dashboard",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Welcome, ${user.firstName}",
-            fontSize = 14.sp,
-            color = Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("Dashboard", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("Welcome, ${user.firstName}", fontSize = 14.sp, color = Color(0xFF8E8E93))
             }
+            Text(
+                text = if (isLoading) "Loading..." else "Refresh",
+                fontSize = 14.sp,
+                color = Color(0xFF007AFF),
+                modifier = Modifier.clickable(enabled = !isLoading) { loadDashboard() }
+            )
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
 
         if (error != null) {
             Text(text = "$error", color = Color.Red, fontSize = 13.sp)
         }
 
-        // Stats cards
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SimpleStatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Primary)
-            SimpleStatCard(Modifier.weight(1f), "Active", "$activeCalls", Secondary)
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SimpleStatCard(Modifier.weight(1f), "Completed", "$completedToday", Success)
-            SimpleStatCard(Modifier.weight(1f), "Drivers", "$driversOnline", Info)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Today's Revenue", fontSize = 14.sp, color = Color.Gray)
-                Text(
-                    text = "$${String.format("%.2f", todayRevenue)}",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Success
-                )
+        if (isLoading && todayCalls == 0) {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text("Loading...", color = Color.Gray, fontSize = 16.sp)
             }
-        }
+        } else {
+            Text("Today's Overview", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = { loadDashboard() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading
-        ) {
-            Text(if (isLoading) "Loading..." else "Refresh")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(Modifier.weight(1f), "Total Calls", "$todayCalls", Color(0xFF007AFF))
+                StatCard(Modifier.weight(1f), "Completed", "$completedToday", Color(0xFF34C759))
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(Modifier.weight(1f), "Active", "$activeCalls", Color(0xFFFF9500))
+                StatCard(Modifier.weight(1f), "Pending", "$pendingCalls", Color(0xFFFFCC00))
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(Modifier.weight(1f), "Drivers On", "$driversOnline", Color(0xFFAF52DE))
+                StatCard(Modifier.weight(1f), "Revenue", "$${String.format("%.2f", todayRevenue)}", Color(0xFF34C759))
+            }
         }
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -148,17 +137,20 @@ fun DashboardScreen(user: User) {
 }
 
 @Composable
-fun SimpleStatCard(modifier: Modifier = Modifier, title: String, value: String, color: Color) {
+fun StatCard(modifier: Modifier = Modifier, title: String, value: String, color: Color) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = color)
-            Text(text = title, fontSize = 12.sp, color = Color.Gray)
+            Text(text = value, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = color)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = title, fontSize = 12.sp, color = Color(0xFF8E8E93))
         }
     }
 }
