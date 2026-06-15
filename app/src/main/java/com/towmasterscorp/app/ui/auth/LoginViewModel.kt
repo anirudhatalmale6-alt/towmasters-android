@@ -73,31 +73,31 @@ class LoginViewModel(
         if (state.isLoading) return
 
         viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            }
             try {
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                }
-                val url = java.net.URL("https://app.towmasterscorp.com/api/auth.php?action=login")
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.setRequestProperty("Accept", "application/json")
-                connection.doOutput = true
-                connection.connectTimeout = 15000
-                connection.readTimeout = 15000
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
 
                 val jsonBody = """{"email":"${state.email.trim()}","password":"${state.password}"}"""
-                connection.outputStream.use { it.write(jsonBody.toByteArray()) }
+                val requestBody = okhttp3.RequestBody.create(
+                    okhttp3.MediaType.parse("application/json; charset=utf-8"),
+                    jsonBody
+                )
 
-                val responseCode = connection.responseCode
-                val responseBody = if (responseCode in 200..299) {
-                    connection.inputStream.bufferedReader().readText()
-                } else {
-                    connection.errorStream?.bufferedReader()?.readText() ?: ""
-                }
-                connection.disconnect()
+                val request = okhttp3.Request.Builder()
+                    .url("https://app.towmasterscorp.com/api/auth.php?action=login")
+                    .post(requestBody)
+                    .build()
 
-                Log.d("LoginVM", "Response: $responseCode - $responseBody")
+                val response = client.newCall(request).execute()
+                val responseBody = response.body()?.string() ?: ""
+                response.close()
+
+                Log.d("LoginVM", "Response: ${response.code()} - $responseBody")
 
                 val gson = com.google.gson.Gson()
                 val result = gson.fromJson(responseBody, LoginResponse::class.java)
@@ -119,12 +119,12 @@ class LoginViewModel(
                         )
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e("LoginVM", "Login error", e)
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Error: ${e.message ?: "Connection failed"}"
+                        error = "Error: ${e.javaClass.simpleName}: ${e.message ?: "Connection failed"}"
                     )
                 }
             }

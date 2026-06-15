@@ -18,6 +18,13 @@ class TowMastersApp : Application() {
         super.onCreate()
         instance = this
 
+        // Global crash handler - log instead of instant death
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("TowMasters", "UNCAUGHT CRASH: ${throwable.javaClass.simpleName}: ${throwable.message}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         // Initialize preferences
         authPreferences = AuthPreferences(this)
 
