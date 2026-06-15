@@ -4,19 +4,13 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.towmasterscorp.app.data.api.ApiClient
-import com.towmasterscorp.app.data.models.LoginRequest
-import com.towmasterscorp.app.data.models.LoginResponse
 import com.towmasterscorp.app.data.models.User
 import com.towmasterscorp.app.data.preferences.AuthPreferences
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class LoginUiState(
     val email: String = "",
@@ -73,61 +67,80 @@ class LoginViewModel(
             return
         }
         if (state.isLoading) return
+        _uiState.value = state.copy(isLoading = true, error = null)
 
-        viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            }
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+        Thread {
             try {
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
+                val url = java.net.URL("https://app.towmasterscorp.com/api/auth.php?action=login")
+                val conn = url.openConnection() as javax.net.ssl.HttpsURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
 
-                val jsonBody = """{"email":"${state.email.trim()}","password":"${state.password}"}"""
-                val mediaType = "application/json; charset=utf-8".toMediaType()
-                val requestBody = jsonBody.toRequestBody(mediaType)
+                val body = org.json.JSONObject()
+                body.put("email", state.email.trim())
+                body.put("password", state.password)
 
-                val request = okhttp3.Request.Builder()
-                    .url("https://app.towmasterscorp.com/api/auth.php?action=login")
-                    .post(requestBody)
-                    .build()
+                conn.outputStream.bufferedWriter().use { it.write(body.toString()) }
 
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: ""
-                response.close()
+                val code = conn.responseCode
+                val responseText = try {
+                    if (code in 200..299) conn.inputStream.bufferedReader().readText()
+                    else conn.errorStream?.bufferedReader()?.readText() ?: ""
+                } catch (e: Exception) { "" }
+                conn.disconnect()
 
-                Log.d("LoginVM", "Response: ${response.code} - $responseBody")
+                Log.d("LoginVM", "HTTP $code: $responseText")
 
-                val gson = com.google.gson.Gson()
-                val result = gson.fromJson(responseBody, LoginResponse::class.java)
+                val json = org.json.JSONObject(responseText)
+                val success = json.optBoolean("success", false)
+                val token = json.optString("token", "")
+                val error = json.optString("error", "")
+                val message = json.optString("message", "")
 
-                withContext(Dispatchers.Main) {
-                    if (result?.success == true && result.token != null && result.user != null) {
-                        ApiClient.token = result.token
-                        authPreferences.saveToken(result.token)
-                        authPreferences.saveUser(result.user)
+                if (success && token.isNotEmpty() && json.has("user")) {
+                    val userJson = json.getJSONObject("user")
+                    val user = User(
+                        id = userJson.optInt("id", 0),
+                        email = userJson.optString("email", ""),
+                        firstName = userJson.optString("first_name", ""),
+                        lastName = userJson.optString("last_name", ""),
+                        role = userJson.optString("role", "driver"),
+                        phone = userJson.optString("phone", null)
+                    )
+
+                    ApiClient.token = token
+
+                    handler.post {
+                        viewModelScope.launch {
+                            authPreferences.saveToken(token)
+                            authPreferences.saveUser(user)
+                        }
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             isLoggedIn = true,
-                            user = result.user
+                            user = user
                         )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = result?.error ?: result?.message ?: "Login failed"
-                        )
+                    }
+                } else {
+                    val errMsg = if (error.isNotEmpty()) error else if (message.isNotEmpty()) message else "Login failed"
+                    handler.post {
+                        _uiState.value = _uiState.value.copy(isLoading = false, error = errMsg)
                     }
                 }
             } catch (e: Throwable) {
-                Log.e("LoginVM", "Login error", e)
-                withContext(Dispatchers.Main) {
+                Log.e("LoginVM", "Login thread error", e)
+                handler.post {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Error: ${e.javaClass.simpleName}: ${e.message ?: "Connection failed"}"
+                        error = "${e.javaClass.simpleName}: ${e.message}"
                     )
                 }
             }
-        }
+        }.start()
     }
 }
