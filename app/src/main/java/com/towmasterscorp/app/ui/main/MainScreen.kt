@@ -138,13 +138,19 @@ fun CallsScreen(title: String, activeOnly: Boolean, user: User, driverOnly: Bool
                         if (driverOnly && call.assignedDriverId != user.id) continue
                         parsed.add(call)
                     }
-                    handler.post { calls = parsed; isLoading = false }
+                    handler.post { calls = parsed
+                        isLoading = false
+                    }
                 } else {
-                    handler.post { error = "Failed to load"; isLoading = false }
+                    handler.post { error = "Failed to load"
+                        isLoading = false
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("CallsScreen", "Load failed", e)
-                handler.post { error = e.message; isLoading = false }
+                handler.post { error = e.message
+                    isLoading = false
+                }
             }
         }.start()
     }
@@ -262,10 +268,16 @@ fun CallCard(call: Call, user: User, onStatusUpdated: () -> Unit) {
                                 }
                                 conn.responseCode
                                 conn.disconnect()
-                                handler.post { isUpdating = false; onStatusUpdated() }
+                                handler.post {
+                                    isUpdating = false
+                                    onStatusUpdated()
+                                }
                             } catch (e: Exception) {
                                 Log.e("CallCard", "Update failed", e)
-                                handler.post { isUpdating = false }
+                                handler.post {
+                                    isUpdating = false
+                                }
+                            }
                         }.start()
                     },
                     modifier = Modifier.fillMaxWidth(),

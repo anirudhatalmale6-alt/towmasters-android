@@ -112,15 +112,22 @@ fun DashboardScreen(user: User) {
                             val tr = today?.optString("total_revenue", "0")?.toDoubleOrNull() ?: 0.0
                             val dr = json.optInt("drivers_active", 0)
                             handler.post {
-                                todayCalls = tc; activeCalls = ac; completedToday = ct
-                                todayRevenue = tr; driversOnline = dr; isLoading = false
+                                todayCalls = tc
+                                activeCalls = ac
+                                completedToday = ct
+                                todayRevenue = tr
+                                driversOnline = dr
+                                isLoading = false
                             }
                         } else {
                             handler.post { isLoading = false }
                         }
                     } catch (e: Exception) {
                         Log.e("Dashboard", "Load failed", e)
-                        handler.post { error = e.message; isLoading = false }
+                        handler.post {
+                        error = e.message
+                        isLoading = false
+                    }
                     }
                 }.start()
             },
