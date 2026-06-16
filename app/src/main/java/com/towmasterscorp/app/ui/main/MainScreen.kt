@@ -253,7 +253,8 @@ fun CallsScreen(
     var totalPages by remember { mutableIntStateOf(1) }
     var isLoadingMore by remember { mutableStateOf(false) }
 
-    var isClockedIn by remember { mutableStateOf(user.isClockedIn != 0) }
+    val clockPrefs = LocalContext.current.getSharedPreferences("clock_state", android.content.Context.MODE_PRIVATE)
+    var isClockedIn by remember { mutableStateOf(clockPrefs.getBoolean("is_clocked_in", user.isClockedIn != 0)) }
     var isClockToggling by remember { mutableStateOf(false) }
 
     fun refreshClockState() {
@@ -265,7 +266,9 @@ fun CallsScreen(
                     if (json.optBoolean("success")) {
                         val u = json.optJSONObject("user")
                         val serverClocked = u?.optInt("is_clocked_in", 0) ?: 0
-                        handler.post { isClockedIn = serverClocked != 0 }
+                        val clocked = serverClocked != 0
+                        clockPrefs.edit().putBoolean("is_clocked_in", clocked).apply()
+                        handler.post { isClockedIn = clocked }
                     }
                 }
             } catch (_: Exception) {}
@@ -278,6 +281,8 @@ fun CallsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val cached = clockPrefs.getBoolean("is_clocked_in", false)
+                isClockedIn = cached
                 refreshClockState()
             }
         }
@@ -295,7 +300,9 @@ fun CallsScreen(
             handler.post {
                 isClockToggling = false
                 if (code in 200..299) {
-                    isClockedIn = !isClockedIn
+                    val newState = !isClockedIn
+                    isClockedIn = newState
+                    clockPrefs.edit().putBoolean("is_clocked_in", newState).apply()
                 }
             }
         }.start()
