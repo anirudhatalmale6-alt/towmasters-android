@@ -256,7 +256,7 @@ fun CallsScreen(
     var isClockedIn by remember { mutableStateOf(user.isClockedIn != 0) }
     var isClockToggling by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    fun refreshClockState() {
         Thread {
             try {
                 val text = apiGet("auth.php?action=me")
@@ -270,6 +270,19 @@ fun CallsScreen(
                 }
             } catch (_: Exception) {}
         }.start()
+    }
+
+    LaunchedEffect(Unit) { refreshClockState() }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                refreshClockState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     fun toggleClock() {
