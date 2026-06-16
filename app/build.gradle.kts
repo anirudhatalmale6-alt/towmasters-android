@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.towmasterscorp.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.towmasterscorp.app"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 18
-        versionName = "1.15.0"
+        targetSdk = 35
+        versionCode = 19
+        versionName = "1.15.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
