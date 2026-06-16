@@ -163,8 +163,8 @@ fun DashboardScreen(
             )
             QuickActionButton(
                 modifier = Modifier.weight(1f),
-                label = "Driver Map",
-                icon = Icons.Default.Map,
+                label = "Active Drivers",
+                icon = Icons.Default.People,
                 color = Color(0xFF34C759),
                 onClick = onDriverMap
             )

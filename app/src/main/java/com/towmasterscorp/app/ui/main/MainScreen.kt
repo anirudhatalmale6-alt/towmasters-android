@@ -3639,47 +3639,23 @@ fun DriverMapScreen(onBack: () -> Unit) {
     var drivers by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var mapHtml by remember { mutableStateOf("") }
     val handler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
-    val context = LocalContext.current
 
-    fun buildMapHtml(driverList: List<org.json.JSONObject>): String {
-        val markers = StringBuilder()
-        var centerLat = 25.7617
-        var centerLng = -80.1918
-        var hasCenter = false
-        driverList.forEach { d ->
-            val name = d.optString("driver_name", "Driver").replace("'", "\\'")
-            val lat = d.optDouble("latitude", d.optDouble("lat", 0.0))
-            val lng = d.optDouble("longitude", d.optDouble("lng", 0.0))
-            if (lat != 0.0 && lng != 0.0) {
-                markers.append("L.marker([$lat,$lng]).addTo(map).bindPopup('$name');")
-                if (!hasCenter) { centerLat = lat; centerLng = lng; hasCenter = true }
-            }
-        }
-        return """<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>html,body,#map{width:100%;height:100%;margin:0;padding:0;}</style>
-</head><body><div id="map"></div><script>
-var map=L.map('map').setView([$centerLat,$centerLng],${if (hasCenter) 12 else 4});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'OSM'}).addTo(map);
-$markers
-</script></body></html>"""
-    }
-
-    fun loadDriverLocations() {
+    fun loadDrivers() {
+        isLoading = true
         Thread {
             try {
-                val text = apiGet("driver-location.php?action=all")
+                val text = apiGet("users.php?action=list&role=driver")
                 if (text != null) {
                     val json = org.json.JSONObject(text)
                     if (json.optBoolean("success")) {
-                        val arr = json.optJSONArray("drivers") ?: json.optJSONArray("locations") ?: org.json.JSONArray()
+                        val arr = json.optJSONArray("users") ?: org.json.JSONArray()
                         val list = mutableListOf<org.json.JSONObject>()
-                        for (i in 0 until arr.length()) list.add(arr.getJSONObject(i))
-                        val html = buildMapHtml(list)
-                        handler.post { drivers = list; mapHtml = html; isLoading = false; error = null }
+                        for (i in 0 until arr.length()) {
+                            val u = arr.getJSONObject(i)
+                            if (u.optInt("is_clocked_in", 0) == 1) list.add(u)
+                        }
+                        handler.post { drivers = list; isLoading = false; error = null }
                     } else {
                         handler.post { isLoading = false; error = "Failed to load" }
                     }
@@ -3687,24 +3663,23 @@ $markers
                     handler.post { isLoading = false; error = "Network error" }
                 }
             } catch (e: Exception) {
-                Log.e("DriverMap", "Load failed", e)
                 handler.post { isLoading = false; error = e.message }
             }
         }.start()
     }
 
-    LaunchedEffect(Unit) { loadDriverLocations() }
+    LaunchedEffect(Unit) { loadDrivers() }
     LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(15000)
-            loadDriverLocations()
+            loadDrivers()
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7))) {
-        ScreenHeader("Driver Map", onBack) {
+        ScreenHeader("Active Drivers", onBack) {
             Text("Refresh", color = Color(0xFF007AFF), fontSize = 14.sp,
-                modifier = Modifier.clickable { loadDriverLocations() }.padding(8.dp))
+                modifier = Modifier.clickable { loadDrivers() }.padding(8.dp))
         }
 
         if (isLoading && drivers.isEmpty()) {
@@ -3716,61 +3691,68 @@ $markers
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Error: $error", color = Color.Red, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("Tap to retry", color = Color(0xFF007AFF), modifier = Modifier.clickable { loadDriverLocations() })
+                    Text("Tap to retry", color = Color(0xFF007AFF), modifier = Modifier.clickable { loadDrivers() })
                 }
             }
         } else if (drivers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No active drivers found", color = Color.Gray, fontSize = 16.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.PersonOff, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("No drivers clocked in", color = Color.Gray, fontSize = 16.sp)
+                }
             }
         } else {
-            var webViewInstance by remember { mutableStateOf<android.webkit.WebView?>(null) }
-
-            if (mapHtml.isNotEmpty()) {
-                androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { ctx ->
-                        android.webkit.WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.loadWithOverviewMode = true
-                            settings.useWideViewPort = true
-                            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            @Suppress("DEPRECATION")
-                            settings.allowUniversalAccessFromFileURLs = true
-                            webViewInstance = this
-                            loadDataWithBaseURL("https://unpkg.com/", mapHtml, "text/html", "UTF-8", null)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().weight(1f)
-                )
-            }
-
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("${drivers.size} Active Driver${if (drivers.size != 1) "s" else ""}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+                Text("${drivers.size} Driver${if (drivers.size != 1) "s" else ""} Clocked In", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF8E8E93))
+
                 drivers.forEach { driver ->
-                    val name = driver.optString("driver_name", "Driver")
-                    val lat = driver.optDouble("latitude", driver.optDouble("lat", 0.0))
-                    val lng = driver.optDouble("longitude", driver.optDouble("lng", 0.0))
-                    val hasCoords = lat != 0.0 && lng != 0.0
-                    Row(modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(8.dp)).padding(10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(name, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        if (hasCoords) {
-                            Text("Locate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White,
-                                modifier = Modifier.background(Color(0xFF007AFF), RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        val safeName = name.replace("'", "\\'").replace("\"", "\\\"")
-                                        val js = "map.setView([$lat,$lng],15);L.popup().setLatLng([$lat,$lng]).setContent('$safeName').openOn(map);"
-                                        webViewInstance?.post { webViewInstance?.evaluateJavascript(js, null) }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    val firstName = driver.optString("first_name", "")
+                    val lastName = driver.optString("last_name", "")
+                    val name = "$firstName $lastName".trim().ifEmpty { "Driver" }
+                    val phone = driver.optString("phone", "")
+                    val lastClockIn = driver.optString("last_clock_in", "")
+                    val locationAt = driver.optString("last_location_at", "")
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF34C759)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                if (phone.isNotEmpty() && phone != "null") {
+                                    Text(phone, fontSize = 13.sp, color = Color(0xFF007AFF))
+                                }
+                                if (lastClockIn.isNotEmpty() && lastClockIn != "null") {
+                                    Text("Clocked in: ${formatTimestamp(lastClockIn)}", fontSize = 11.sp, color = Color(0xFF8E8E93))
+                                }
+                                if (locationAt.isNotEmpty() && locationAt != "null") {
+                                    Text("Last location: ${formatTimestamp(locationAt)}", fontSize = 11.sp, color = Color(0xFFAEAEB2))
+                                }
+                            }
+                            Box(
+                                modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF34C759))
                             )
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

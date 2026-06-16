@@ -12,8 +12,8 @@ android {
         applicationId = "com.towmasterscorp.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.14.1"
+        versionCode = 18
+        versionName = "1.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
