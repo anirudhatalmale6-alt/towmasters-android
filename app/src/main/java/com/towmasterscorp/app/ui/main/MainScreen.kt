@@ -265,8 +265,15 @@ fun CallsScreen(
                     val json = org.json.JSONObject(text)
                     if (json.optBoolean("success")) {
                         val u = json.optJSONObject("user")
-                        val serverClocked = u?.optInt("is_clocked_in", 0) ?: 0
-                        val clocked = serverClocked != 0
+                        val clocked = if (u != null) {
+                            val raw = u.opt("is_clocked_in")
+                            when (raw) {
+                                is Boolean -> raw
+                                is Number -> raw.toInt() != 0
+                                is String -> raw == "1" || raw == "true"
+                                else -> false
+                            }
+                        } else false
                         clockPrefs.edit().putBoolean("is_clocked_in", clocked).apply()
                         handler.post { isClockedIn = clocked }
                     }
