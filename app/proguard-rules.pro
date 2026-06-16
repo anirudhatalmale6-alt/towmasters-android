@@ -27,3 +27,16 @@
 # Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# Firebase
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# Coil
+-dontwarn coil.**
+
+# Compose
+-dontwarn androidx.compose.**
+
+# Keep data classes used with JSON
+-keep class com.towmasterscorp.app.data.models.CallAddress { *; }

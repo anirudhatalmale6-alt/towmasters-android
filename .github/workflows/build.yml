@@ -27,8 +27,26 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Build Release AAB
+        run: ./gradlew bundleRelease
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: towmasters-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: towmasters-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: towmasters-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
